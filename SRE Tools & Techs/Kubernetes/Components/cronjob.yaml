@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: data-backup-job
+spec:
+  schedule: "0 2 * * *"                  # Run daily at 2:00 AM
+  timeZone: "Asia/Kolkata"               # Optional: run in IST
+  successfulJobsHistoryLimit: 3          # Keep last 3 successful jobs
+  failedJobsHistoryLimit: 1              # Keep last 1 failed job
+  concurrencyPolicy: "Forbid"            # Don't run if the previous is still running ( allow(default) / forbid / replace)
+  startingDeadlineSeconds: 200           # defines a deadline (in whole seconds) for starting the Job, if that Job misses its scheduled time for any reason.
+  suspend: false                         # Set to true to pause the CronJob
+  jobTemplate:
+    spec:
+      backoffLimit: 2                    # Retry job 2 times if it fails
+      template:
+        spec:
+          restartPolicy: OnFailure       # Restart pod only if it fails
+          containers:
+            - name: backup
+              image: alpine              # Lightweight image for demo
+              args:
+                - /bin/sh
+                - -c
+                - "echo 'Backing up DB at $(date)'"
+              env:
+                - name: BACKUP_PATH
+                  value: "/mnt/backups"

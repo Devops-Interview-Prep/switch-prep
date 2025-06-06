@@ -1,0 +1,6 @@
+
+In Go, defer is used to schedule a function call to be executed after the surrounding function completes.
+
+A deferred function executes in LIFO (Last In, First Out) order when the function returns.
+Multiple Deferred functions execute in reverse order (LIFO).
+defer is commonly used for resource cleanup (closing files, unlocking mutexes, closing database connections, etc.).

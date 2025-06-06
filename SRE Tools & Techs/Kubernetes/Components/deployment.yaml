@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+  namespace: production
+  labels:
+    app: my-app
+    environment: production
+spec:
+  replicas: 5  # Ensure high availability by running 5 replicas
+  selector:
+    matchLabels:
+      app: my-app
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2         # Allows 2 extra Pods during update
+      maxUnavailable: 1   # Ensures at least 4 Pods remain available
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      affinity:
+        nodeAffinity:  # Ensures the application runs only on SSD-based nodes.
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: disktype
+                    operator: In
+                    values:
+                      - ssd
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: backend
+             topologyKey: kubernetes.io/hostname
+
+      nodeSelector:
+        cloud-provider: aws  # Deploy only on AWS nodes, 
+        # Pod will run only on nodes with this label
+        # If no node has that label, the Pod stays pending.
+      tolerations:
+        - key: "node-type"
+          operator: "Equal"
+          value: "gpu"
+          effect: "NoSchedule"
+      containers:
+        - name: my-app-container
+          image: my-app:latest
+          imagePullPolicy: Always  # Always pull the latest image for production
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ENVIRONMENT
+              value: "production"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: my-app-secrets
+                  key: database_url
+            - name: CONFIG_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: my-app-config
+                  key: app-config.yaml
+          resources:
+            limits:
+              cpu: "2"          # Max 2 CPU cores
+              memory: "2Gi"     # Max 2GB RAM
+            requests:
+              cpu: "500m"       # Request 0.5 CPU
+              memory: "512Mi"   # Request 512MB RAM
+          readinessProbe:   # Ensures the Pod is ready before receiving traffic.
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:   # Ensures the Pod is running correctly.
+            httpGet:
+              path: /live
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          volumeMounts:
+            - name: app-logs
+              mountPath: /var/log/my-app
+      volumes:
+        - name: app-logs
+          emptyDir: {}
+          # EmptyDir Volume: Temporary storage for logs (wiped when the Pod is deleted).
+      imagePullSecrets:
+        - name: my-registry-secret
+      restartPolicy: Always
