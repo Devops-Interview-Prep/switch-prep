@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-app-service              # Name of the service
+  namespace: my-namespace           # Namespace where this service exists
+  labels:
+    app: my-app                     # Labels for selecting or identifying the service
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"   # Example annotation to use AWS NLB
+    service.beta.kubernetes.io/aws-load-balancer-internal: "true"  # Make NLB internal
+
+spec:
+  type: LoadBalancer                # Service type: ClusterIP (default), NodePort, LoadBalancer, ExternalName
+  externalTrafficPolicy: Local      # 'Cluster' or 'Local'
+                                    # - Cluster: forwards to any pod in cluster (may lose source IP)
+                                    # - Local: only to pods on node (preserves source IP)
+
+  ipFamilyPolicy: PreferDualStack   # Choose between IPv4/IPv6. Options: SingleStack, PreferDualStack, RequireDualStack
+                                    # Look for mode: ipvs or iptables and see if dual stack is enabled (if specified).
+  ipFamilies:
+    - IPv4                          # Supports IPv4 and/or IPv6 addresses
+
+  allocateLoadBalancerNodePorts: true   # If false, disables auto-creation of NodePorts (only with type=LoadBalancer)
+
+  loadBalancerIP: "192.0.2.100"     # Optional static IP for the LoadBalancer if supported by cloud provider
+
+  sessionAffinity: ClientIP         # Options: None (default) or ClientIP (sticky sessions)
+                                    # Kube-proxy route all requests from that client IP to the same pod (until the session times out).
+                                    # only works if: Client IP is preserved  with externalTrafficPolicy: Local
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800         # Time the client IP is sticky (default: 10800s = 3 hours)
+
+  internalTrafficPolicy: Cluster    # Newer option (K8s 1.21+) to control pod selection for internal traffic
+                                    # - Cluster: default, any pod
+                                    # - Local: only pods on the same node
+
+  ports:
+    - name: http
+      protocol: TCP                 # TCP or UDP (or SCTP)
+      port: 80                      # Port exposed inside the cluster
+      targetPort: 8080             # Port on the pod/container
+      nodePort: 30080              # Optional: use with NodePort or LoadBalancer to expose on each node
+
+  selector:
+    app: my-app                     # Select pods matching this label (connects to matching pods)

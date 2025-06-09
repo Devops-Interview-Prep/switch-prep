@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-db
+  namespace: my-namespace
+spec:
+  type: ExternalName
+  externalName: db.example.com       # 👈 The external DNS name
+  ports:
+    - port: 3306                     # Optional, for consistency/documentation

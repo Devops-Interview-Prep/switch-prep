@@ -239,4 +239,33 @@ Transit Gateway (TGW) is a regional network transit hub that connects:
     - Inter-region peering has additional transfer costs.
 
 
+# Egress-only Internet gateway
+
+- An Egress-Only Internet Gateway (EOIGW) is a VPC component in AWS that allows only outbound IPv6 traffic from instances in a private subnet to the internet — but blocks inbound traffic from the internet.
+
+- With IPv6, NAT (Network Address Translation) is not used like with IPv4. Every IPv6 address is globally routable, which means:
+    - Without a NAT mechanism, instances in private subnets with IPv6 could be accessed directly from the internet unless restricted.
+    - EOIGW solves this by allowing only egress (outbound) IPv6 internet traffic and no ingress (inbound) traffic.
+
+# DHCP(custom Dynamic Host Configuration Protocol) option set
+
+- When you launch an EC2 instance in a VPC, it gets network settings like:
+    - Domain Name System (DNS) server IP
+    - Domain name
+    - (Optionally) NTP servers, NetBIOS settings, etc.
+
+These are controlled by the DHCP options set associated with the VPC.
+
+
+# Managed Prefix Lists
+
+- In AWS, Managed Prefix Lists are collections of CIDR blocks that you can use to simplify and centralize network access control across your VPCs, route tables, and security groups.
+
+- A prefix list is a set of CIDR blocks (IP ranges) that represent common services or networks — like:
+    1. AWS service endpoints (e.g., S3, DynamoDB)
+    2. Shared CIDRs across multiple route tables or security groups
+    3. Your organization’s on-prem IP
+
+
+
 

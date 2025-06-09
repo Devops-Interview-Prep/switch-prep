@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-db
+  namespace: my-namespace
+spec:
+  clusterIP: None                      # 👈 makes it headless
+  selector:
+    app: my-db
+  ports:
+    - name: db
+      port: 5432                       # Port clients will use
+      targetPort: 5432                 # Port on the pods
