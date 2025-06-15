@@ -8,21 +8,24 @@ import (
 
 
 func main(){
-	file, err := os.Open("file.txt")
-	if err != nil {
-		panic(err)
-	}
+file, err := os.Open("file.txt")
+ if err != nil {
+	fmt.Println(err)
+	return
+ }
 
-	defer file.Close()
+scanner := bufio.NewScanner(file)
 
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan(){
-		fmt.Println(scanner.Text())
-	}
-   
-	err = scanner.Err(); 
+for scanner.Scan(){
+fmt.Println(scanner.Text())
+}
 
-	if err != nil {
-		panic(err)
-	}
+err = scanner.Err()
+
+if err != nil {
+	fmt.Println(err)
+	return
+}
+
+
 }

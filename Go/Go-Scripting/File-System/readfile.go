@@ -3,16 +3,24 @@ package main
 import (
 	"fmt"
 	"os"
-	"log"
 )
 
 func main() {
-	data, err := os.ReadFile("file.txt") // Read the entire file into memory
-	if err != nil {
-		log.Fatal(err)
+	data, err := os.ReadFile("file.txt")
+	if err != nil{
+		fmt.Println(err)
+		return
 	}
-	fmt.Println(string(data)) // Print file contents
+	fmt.Println(string(data))
 }
+
+// func main() {
+// 	data, err := os.ReadFile("file.txt") // Read the entire file into memory
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+// 	fmt.Println(string(data)) // Print file contents
+// }
 
 
 /* 

@@ -1,13 +1,15 @@
 package main
 
 import (
+	"fmt"
 	"os"
 )
 
 func main() {
-	err := os.WriteFile("newfile.txt", []byte("This is new file"), 0644 )
+    err := os.WriteFile("file1.txt", []byte("this is file 1 \nthis is created by write function."), 0644)
 	if err != nil {
-		panic(err)
+		fmt.Print(err)
+		return
 	}
 }
 
