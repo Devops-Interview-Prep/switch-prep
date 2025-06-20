@@ -184,7 +184,7 @@ resource "my_resource" "example" {
 
 - *How to iterate over List using for?*
 
-Same as above use string inplace of map
+Same as above use string inplace of set
 
 ```
 for_each = { for idx, value in var.my_list : idx => value }

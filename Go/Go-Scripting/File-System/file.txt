@@ -1,4 +1,5 @@
-this is test file
-This is appended line
+
+This is appended line3is appended line
 
 changed file
+This is appended line2

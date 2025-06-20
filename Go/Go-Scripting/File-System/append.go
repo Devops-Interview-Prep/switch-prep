@@ -10,9 +10,9 @@ func main() {
 		panic(err)
 	}
 
-	defer file.close()
+	defer file.Close()
 
-	_, err = file.WriteString("\nThis is appended line")
+	_, err = file.WriteString("\nThis is appended line3")
 	if err != nil {
 		panic(err)
 	}

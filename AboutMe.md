@@ -18,3 +18,10 @@ Currently working with pinelabs, its fintech company where we get really high tr
 
 they started this project after i joined and now it has been scaled to around 60 services and still growing.
 I manage the infra management, monitoring,  deployment workflows and the production issues , recently did the setup for dr in different region 
+
+
+
+Gracenote is a media and entertainment data company, now a subsidiary of Nielsen. It provides metadata, content IDs, and related services that power search, discovery, personalization, and recommendation engines for music, movies, TV, and sports content. Their data is used by streaming platforms, smart TVs, car infotainment systems, and more.
+
+High-Scale, Real-World Problems
+Global Impact

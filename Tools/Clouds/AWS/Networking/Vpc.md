@@ -70,7 +70,7 @@ specific IP address range.
 
 - Route Tables are mainly used to Define the protocol for traffic routing between the subnets.
 - A single VPC can have as many as route tables it requires.
-- f the dependencies are attached to the route table then they can't be deleted. 
+- If the dependencies are attached to the route table then they can't be deleted. 
 
 -  Every VPC has a default route table
    -  When you create a VPC, a main route table is automatically created.
