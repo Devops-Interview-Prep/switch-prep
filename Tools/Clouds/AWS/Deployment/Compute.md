@@ -1,7 +1,0 @@
-# EKS
-
-# ECS
-
-# Fargate
-
-# Lambda

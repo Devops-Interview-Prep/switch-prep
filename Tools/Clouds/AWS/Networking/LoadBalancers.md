@@ -59,6 +59,8 @@ In AWS, load balancers are services that distribute incoming traffic across mult
     - Designed for security appliance deployments
 
     - Integrates with VPC Endpoints (PrivateLink)
+**4. Classic**
+The Classic Load Balancer (CLB) is the first-generation load balancer provided by AWS. It distributes incoming application or network traffic across multiple EC2 instances in one or more Availability Zones, helping to improve fault tolerance and scalability.
 
 
 # Architectures using Load Balancers in k8s for external Traffic
@@ -141,5 +143,10 @@ In AWS, load balancers are services that distribute incoming traffic across mult
 - No full WebSocket support without HTTPS
 
 - gRPC only works properly over HTTPS.
+
+
+
+
+
 
 

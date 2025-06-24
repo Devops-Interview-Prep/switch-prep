@@ -23,7 +23,7 @@
         - The shell calls fork() to create a child.
         - The child then calls exec() to load and run the /bin/ls binary.
         - The parent shell waits until the child process exits.
-        - 
+  
 - Every process starts as a child of another process.
 
 

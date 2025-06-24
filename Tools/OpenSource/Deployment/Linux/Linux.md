@@ -40,6 +40,7 @@
         - Ex. - VMcare vSphere / ESXi, Xen / Citrix Xenserver
         - Used by cloud providers and Enterprise Servers
       - *Hosted*
+
     - UseCase
       - Cheap
       - Redusce Workload, Space, Energy

@@ -13,7 +13,7 @@
 
 # Using normal terminal
 
-- `ssh username@server-ip`
+- `ssh username@server-ip -p port`
 - later will ask for the password 
 
 # File Transfer bw Linux and Windows(WinScp)

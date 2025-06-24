@@ -31,7 +31,7 @@ CMD ["java", "-jar", "app.jar"]
     WORKDIR /app
     COPY build.gradle settings.gradle ./
     COPY src ./src
-    RUN gradle build -x test
+    RUN ./gradlew build -x test
 
     #-x test : Excludes the test task entirely
     

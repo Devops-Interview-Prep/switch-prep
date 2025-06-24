@@ -115,6 +115,40 @@ The on-prem network must have a route back to your VPC’s CIDR in its routing (
 - Only instances with a public IPv4 address or Elastic IP can communicate directly with the internet via the IGW.
 
 
+# VPC Endpoint
+
+- A VPC Endpoint enables private communication between your VPC and supported AWS services (like S3, DynamoDB, SSM) without going through the public internet.
+
+- It allows your EC2 instances and other resources in a VPC to securely connect to AWS services without needing a NAT Gateway, Internet Gateway, or public IP.
+
+- **Types**
+  - *Interface Endpoints (Powered by PrivateLink)*
+    - Creates a private IP-based connection between your VPC and an AWS service 
+    - Deploys a network interface (ENI) in your subnet with private IPs
+    - Use Cases:
+      - EC2 → SSM (Session Manager)
+      - Lambda in VPC → SQS/SNS
+      - Private API Gateway access
+  - *Gateway Endpoints (For S3 and DynamoDB Only)*
+    - Adds a route in your route table to reach S3/DynamoDB via the AWS backbone
+    - EC2 in private subnet downloading files from S3
+    - VPC → DynamoDB from Lambda
+
+- **Real-World Example**
+  - Scenario 1: IAM Role without VPC Endpoint
+    - You give an EC2 instance an IAM role with S3 read/write permissions.
+    - The EC2 is in a private subnet, with only a NAT Gateway.
+    - When the instance tries to access s3.amazonaws.com:
+    - The request goes through the NAT Gateway, out to the public internet, then back into AWS S3 service.
+    - Even though it’s secure (HTTPS), it’s not internal-only.
+
+  - Scenario 2: IAM Role + VPC Endpoint
+    - You give the same IAM role.
+    - But now you also create a Gateway VPC Endpoint for S3.
+    - AWS automatically routes traffic for S3 over the AWS internal backbone — no public internet at all.
+    - It’s faster, cheaper, and more secure.
+
+
 
 # Network Address Translation (NAT)
 
@@ -265,6 +299,7 @@ These are controlled by the DHCP options set associated with the VPC.
     1. AWS service endpoints (e.g., S3, DynamoDB)
     2. Shared CIDRs across multiple route tables or security groups
     3. Your organization’s on-prem IP
+
 
 
 

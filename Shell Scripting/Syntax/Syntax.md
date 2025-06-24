@@ -106,6 +106,11 @@ slice=${var:6:11}  # will give index 6 to 11 not similar to array
 
 - To read with messqage 
 
+- `stty -echo`
+  - This command disables echoing of characters, so the password input is not displayed on the screen.
+- `stty echo`
+  - This command re-enables echoing of characters after the password has been entered.
+
 
 # Airthmetic Operations
 
@@ -139,10 +144,10 @@ else
 .....
 fi
 
-
 # use if[[]] for inhanced version
 
 ```
+- Use `if [[ "$input" =~ ^[0-9]+$ ]]` for comparing regex
 
 - for greater than use `-gt`
 - for greater than equal to use `-ge`
@@ -150,6 +155,49 @@ fi
 - for less than equal to use `-le`
 - for numerice equal use `-eq`
 - for string equal use `==`
+
+```
+# These check if files/directories exist or have certain properties:
+
+Flag	                Meaning
+-e file	                File exists (any type)
+-f file	                File exists and is a regular file
+-d file	                File exists and is a directory
+-s file	                File exists and is not empty
+-L file	                File is a symbolic link
+-r file	                File is readable
+-w file	                File is writable
+-x file	                File is executable
+-b file	                File is a block special file (device)
+-c file	                File is a character special file
+-h file	                File is a symbolic link (same as -L)
+-p file	                File is a named pipe (FIFO)
+-S file	                File is a socket
+-N file	                File was modified since last read
+file1 -nt file2	        File1 is newer than file2
+file1 -ot file2	        File1 is older than file2
+file1 -ef file2	        File1 and file2 are the same file (hard links, etc.)
+
+
+# Used to compare strings:
+
+Expression	                Meaning
+= or ==	                    Strings are equal (== only in [[ ]])
+!=	                        Strings are not equal
+<	                        String1 is less than string2 (lexicographically, [[ ]] only)
+>	                        String1 is greater than string2 (lexicographically, [[ ]] only)
+-z string	                String is empty
+-n string	                String is not empty
+
+# Used to combine conditions:
+
+Operator	                Meaning
+-a	                        Logical AND (used in [ ])
+-o	                        Logical OR (used in [ ])
+!	                        NOT
+&&	                        AND (preferred in [[ ]])
+
+```
 
 
 **CASE**
@@ -303,13 +351,13 @@ $@
 - `basename` to get file name without the dir info 
 - `dirname` to get the dir name without the file info
 - `realpath` to get functional path of the file
-- `if [ -d/f foldername ]` -> d for folder, f for file
+- `if [ -d/f foldername/filename ]` -> d for folder, f for file
 - `if [ ! -d/f foldername ]`
 
 # Bash Variables
 
 - `RANDOM` - a random integer between 0 to 32767 is generated 
-  - `RANDOM%n + 1` - to get random number between 1 to 6
+  - `RANDOM%n2 + n1` - to get random number between n1 to n2
 - `UID`
 
 
@@ -371,6 +419,13 @@ $@
 
 - `free -h` shows memory used and free
 - `free -mt` shows total memory used and free
+
+# file
+
+- `${file##*.}` extracts file extenstion
+- The `chmod go= file` means:
+  - g=: Removes all permissions for the group.
+  - o=: Removes all permissions for others.
 
 
 
