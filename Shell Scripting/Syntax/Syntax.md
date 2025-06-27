@@ -426,6 +426,33 @@ $@
 - The `chmod go= file` means:
   - g=: Removes all permissions for the group.
   - o=: Removes all permissions for others.
+- u stands for owner 
+- g stands for group 
+- o stands for other 
+- +/-r for read permission
+- +/-w & +/-x for write and execute permission
+
+# Compress and Archive 
+
+1. `tar`  - Archiving and (optionally) compressing
+    - archive only  `tar -cf archive.tar file1 file2 folder/`
+    - Archive + compress using gzip - `tar -czf archive.tar.gz file1 file2 folder/`
+    - Extract any tar archive 
+      - `tar -xf archive.tar`
+      - `tar -xzf archive.tar.gz`
+
+2. `gzip` – Compress single files
+    - `gzip file.txt`  # creates file.txt.gz
+    - `gunzip file.txt.gz`  # restores file.txt
+
+3. `zip` – Archive and compress in one step
+    -  `zip archive.zip file1 file2 folder/`    Compress files/folders into .zip
+    -  `unzip archive.zip`
+
+
+
+
+ 
 
 
 
