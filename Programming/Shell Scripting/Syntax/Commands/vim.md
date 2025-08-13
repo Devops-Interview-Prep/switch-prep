@@ -1,0 +1,18 @@
+# VIM EDITOR 
+- G -> to reach last line   
+- gg -> to reach top line    
+- u -> undo 
+- ctrl + r -> redo
+- o -> next line input
+- O -> input above line 
+- I -> start in line 
+- A -> end in line 
+- x -> delete character
+- n dd -> cut n lines
+- p -> paste
+- V -> select ( use v for usual mode and select ) + y (to copy)
+- :set nu ( put line numbers)
+- :set nonu ( remove numbers)
+- :syntax on ( colur scheme)
+- :100 ( come to line number)
+- vim -o file1 file2 

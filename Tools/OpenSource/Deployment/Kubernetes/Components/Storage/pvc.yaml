@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-app-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce # Must match the PV's access mode
+  resources:
+    requests:
+      storage: 5Gi # Requesting 5GB of storage
+  storageClassName: "gp2" # Requesting storage from the 'gp2' StorageClass
+
+  #Using a PVC in a Pod:
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: my-app-pod
+spec:
+  containers:
+  - name: my-container
+    image: nginx
+    volumeMounts:
+    - name: my-persistent-storage
+      mountPath: /var/lib/data
+  volumes:
+  - name: my-persistent-storage
+    persistentVolumeClaim:
+      claimName: my-app-pvc # Referencing the PVC

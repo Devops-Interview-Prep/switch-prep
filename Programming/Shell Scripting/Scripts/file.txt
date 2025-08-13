@@ -1,0 +1,5 @@
+ID NAME SALARY STATE
+
+1 pawan 3000000 Rajasthan
+2 swetha 3500000 Tamilnadu
+3 Bijesh 1600000 Rajasthan 

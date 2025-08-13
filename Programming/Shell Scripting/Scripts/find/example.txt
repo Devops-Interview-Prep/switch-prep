@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name=”description” content="Living and working in a single
+.txt file">
+    <meta name="author" content="Mike Grindle">
+    <meta name="keywords" content="obtf, single txt file, one big text
+file">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel=stylesheet type="text/css" href="/style.css">
+    <title>My One Big Text File</title>
+</head>
+<body>
+         <main>
+             <header>
+                 <h1>My One Big Text File</h1>
+    <p><time datetime="2024-02-01">1st February, 2024</time></p>
+            </header>
+<p>I do all my writing in a text file. Not any text file or “text
+files.” I mean one single .txt file.</p>
+<p>All my notes, blog posts, ideas, essays - anything not written in pen
+or pencil - live in or begin life in this document and its copies.
+Everything I post online is just a copy-paste.</p>
+<p>Sounds chaotic, right? Maybe it is, a little. But not as much as you
+might think. Personally, I think it’s removed the distractions and fuss
+of previous workflows I’ve tried.</p>
+<p>But to be clear, what I’m about to share is not some productivity
+hack. It won’t automate your workflow, “link your thinking,” or make
+writing easy. You could think of it as a lazy man’s PKM. Though it’s
+more for knowledge dumping than “knowledge management.”</p>
+<p>For the record, I think the most “powerful” note-taking and writing
+system is the one that you find enjoyable to use, allows you to retrieve
+old ideas, and inspires you to write and think every day. Anything more
+is superfluous and might actually get in the way.</p>
+<p>To this end, a notebook with an index (which I also use) is perfectly
+viable. As is a folder on your desktop or the note software on your
+phone.</p>
+<p>And so is One Big Text File (OBTF).</p>
+<h2 id="what-is-obtf">What is OBTF?</h2>
+<p>Using OBTF is not a new idea. It was relatively popular among niche
+blogosphere circles in the mid-2000s. As far as I can tell from the
+surviving posts, the concept can be traced back to some <a
+href="https://craphound.com/lifehacks2.txt">observations</a> by tech
+journalist Danny O’Brien regarding how technologists work.</p>
+<p>In any case, the premise behind OBTF is simple. It is the idea of
+keeping everything - or nearly everything - in one .txt (or .md) file.
+You might use it to store to-do lists, URLs, meeting notes, a
+reading log, a calendar, blog entries, essays, or pretty much anything
+else. However, I wouldn’t suggest using it to store sensitive
+information like passwords, your darkest secrets or bank details.</p>
+<p>Now, you might ask why anyone would remove all the categorization
+benefits of having separate files and folders. And wouldn’t the result
+be an unwieldy mess? Well, in my experience, finding things in OBTF is
+blazingly fast.</p>
+<p>To be clear, I don’t scroll through my OBTF looking for things. That
+really would be hell. I don’t even touch a touchpad or a mouse. Instead, I
+use tags and search. The latter of which can be done using hotkeys found
+on pretty much any modern text editor.</p>
+<p>The base of my daily workflow is reading, thinking, and dumping
+thoughts that I think are worth remembering or writing (because a note
+is not always something you need to remember, but often something you
+need to <a href="https://mikegrindle.com/posts/write-to-think">write to
+think</a> about) into my file. When there’s something I want to talk
+about more extensively, I look over my previous notes on the subject and
+start writing right there in said file.</p>
+<p>Once I’ve written and am relatively happy with a long-form piece of
+writing, I’ll copy it over into a new .md file, run a few
+grammar-checking scripts (largely pinched from <a
+href="https://matt.might.net/articles/shell-scripts-for-passive-voice-weasel-words-duplicates/?source=techstories.org">here</a>),
+convert the .md file into an HTML file using a program called <a
+href="https://pandoc.org/">pandoc</a> and upload it to my site (or
+copy-paste it to wherever I need).</p>
+<p>The above may sound like a lot of work, but it mostly happens from my
+OS’s terminal with a handful of commands. I’m sure a similar workflow
+could be achieved just as easily using GUI tools.</p>
+<p>Again, if the system sounds imperfect, that’s because it is. The
+appeal is not perfect “knowledge management.” It’s about removing any
+friction from my workflow.</p>
+<p>OBTF lets me throw in knowledge, forget about it, and <em>maybe</em>
+retrieve it later. It’s kind of like a notebook in that sense. And as
+far as I’m aware, no one has yet <em>proven</em> there to be a
+<em>better</em> system than a notebook. So, why not replicate that?</p>
+<h2 id="why-would-i-do-this">Why would I do this?</h2>
+<p>What are the benefits of working like this? For me, a few points
+come to mind:</p>
+<ul>
+<li>Zero distractions (no fiddling with formatting, fonts, plug-ins, or
+shiny new productivity tools - markdown formatting handles
+everything)</li>
+<li>Miniscule storage and processing. Even a massive .txt file will run
+nicely on relatively ancient hardware and lightweight operating
+systems</li>
+<li>Easy to sync data between computers</li>
+<li>Can “dump” notes without worrying about where they “fit” in a
+system</li>
+<li>Works with any text editor with search functionality (so, all of
+them), meaning there’s no fear of client lock-in, software
+enshittification, or losing access to your data. .txt will always be
+platform, system, and application-independent</li>
+<li>Everything can be found in one place with relative ease. That means
+no logging into the cloud or switching between software to find
+stuff</li>
+<li>Basically, zero task-switching</li>
+<li>It works well with a mouse/touchpad-free workflow</li>
+<li>As the text file grows, you can look back at your progress (all
+those ticked to-do lists) and the progression of your thinking.</li>
+</ul>
+<p>Of course, there are potential drawbacks to OBTF as well. If you
+don’t use tags, things will get lost (I’d argue some things are
+<em>meant</em> to be lost, but I digress). Also, if you’re not used to
+working with .txt files or text editors, the lack of inline formatting
+could be a little disorientating at first.</p>
+<p>Nonetheless, I feel like OBTF manages to achieve a lot of the things
+PKM software promises with none of the fuss, set-up, or anxiety about
+using the “right” methodology (I probably couldn’t sell you a course on
+the “right way” to use a One Big Text File. Don’t worry, I don’t want to
+either). In any case, it works for me.</p>
+<h2 id="final-thoughts">Final thoughts</h2>
+<p>I have an inkling that very few people who read this will attempt to
+implement their own OBTF. This is okay. Despite my personal love for the
+idea, I don’t want your big takeaway to be that using a big text file is
+the future. It isn’t.</p>
+<p>What I will say is that whatever works, works. And it doesn’t need to
+be fancy.</p>
+<p>Of course, you can keep your notes, ideas, and writing in a
+cutting-edge PKM program if that works for you. You can also use a
+notebook, index cards, a big f’n text file, a blog, or just keep a bunch
+of files in a folder. The truth is that the medium and the tools don’t
+matter. What matters is that you get that stuff in your head down.
+Tomorrow’s revelation might just be the fleeting thought you had
+today.</p>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li><a
+href="https://danlucraft.com/blog/2008/04/plain-text-organizer/">A Plain
+Text Personal Organizer</a> by Daniel Lucraft</li>
+<li><a
+href="https://www.williamhern.com/living-in-a-single-text-file.html">Living
+in a Single Text File</a> by William Hern</li>
+<li><a href="https://jeffhuang.com/productivity_text_file/">My
+productivity app is a never-ending .txt file</a> by Jeff Huang</li>
+</ul>
+<footer>
+<hr>
+<a href="https://www.buymeacoffee.com/mgrindle"><img src="bmac.jpg" alt="buy me a coffee button"></a>
+<a href="https://indieweb.social/@mikegrindle"><img src="mastodon.jpg" alt="Mastodon button"></a>
+<p><a href="https://mikegrindle.com">← Home</a></p>
+<br>
+</footer>
+        </main>
+    </body>
+</html>

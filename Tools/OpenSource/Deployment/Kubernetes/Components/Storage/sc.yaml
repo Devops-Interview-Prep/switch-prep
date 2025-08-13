@@ -1,0 +1,50 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp2 # Name for this StorageClass
+provisioner: ebs.csi.aws.com # AWS EBS CSI driver
+parameters:
+  type: gp2 # EBS volume type
+  fsType: ext4 # Filesystem type
+reclaimPolicy: Delete # Automatically delete the EBS volume when PVC is deleted
+allowVolumeExpansion: true # Allow resizing the volume
+volumeBindingMode: WaitForFirstConsumer # Important for AZ-aware provisioning
+
+
+# Example gp3 StorageClass:
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  fsType: ext4
+  iopsPerGb: "300" # Baseline 3000 IOPS for 10GB volume
+  throughput: "125" # Baseline 125 MBps
+  encrypted: "true"
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+
+
+# Example EFS StorageClass:
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: efs-sc
+provisioner: efs.csi.aws.com
+parameters:
+  # No parameters for EFS within the StorageClass for basic setup,
+  # as you typically provision the EFS file system externally.
+  # You link to an existing EFS File System ID via PVC annotation or specific provisioner config.
+  # Or, the CSI driver can dynamically provision if properly configured.
+  # For static provisioning, you'd specify volumeHandle in the PV.
+  # For dynamic, the driver needs to know which EFS to provision into (e.g., via EKS Fargate profiles or a custom setup).
+  # For simple setups, often you'd create the EFS file system manually and then create a PV that points to it.
+  directoryPerms: "777" # Example, customize as needed
+  # efsFileSystemId: fs-0abcdef1234567890 # Could be specified if you're using a single EFS
+reclaimPolicy: Retain # Usually Retain for EFS, as deleting the PVC shouldn't delete the entire EFS
+volumeBindingMode: Immediate # Or WaitForFirstConsumer if driver supports AZ selection

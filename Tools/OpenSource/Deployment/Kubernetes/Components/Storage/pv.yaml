@@ -1,0 +1,16 @@
+# Example of a Manually Provisioned PV (less common with dynamic provisioning)
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: my-ebs-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain # Or Delete for managed
+  awsElasticBlockStore: # AWS specific configuration
+    volumeID: vol-0abcdef1234567890 # Replace with your EBS volume ID
+    fsType: ext4
+  # storageClassName: "manual" # Optional: to bind with a specific storage class

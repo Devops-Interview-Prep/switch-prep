@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: my-stateful-app
+spec:
+  serviceName: "my-stateful-app-service" # Must match the headless service name
+  replicas: 3 # Number of instances
+  selector:
+    matchLabels:
+      app: my-stateful-app
+  template:
+    metadata:
+      labels:
+        app: my-stateful-app
+    spec:
+      containers:
+      - name: nginx
+        image: k8s.gcr.io/nginx-slim:0.8
+        ports:
+        - containerPort: 80
+          name: web
+        volumeMounts:
+        - name: www # Name must match volumeClaimTemplates name
+          mountPath: /usr/share/nginx/html # Path inside the container
+      # readinessProbe: # Recommended for stateful apps
+      #   httpGet:
+      #     path: /index.html
+      #     port: 80
+      #   initialDelaySeconds: 5
+      #   periodSeconds: 5
+      # livenessProbe: # Recommended for stateful apps
+      #   httpGet:
+      #     path: /index.html
+      #     port: 80
+      #   initialDelaySeconds: 15
+      #   periodSeconds: 20
+  volumeClaimTemplates: # This defines the PVCs for each Pod
+  - metadata:
+      name: www # Name for the PVC (will be suffixed with Pod ordinal)
+    spec:
+      accessModes: [ "ReadWriteOnce" ] # Only one Pod can mount read/write
+      storageClassName: "gp2" # Or your specific StorageClass
+      resources:
+        requests:
+          storage: 1Gi # Size of the persistent volume

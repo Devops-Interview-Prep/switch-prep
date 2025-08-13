@@ -87,10 +87,10 @@ specific IP address range.
 ```
 Ex. Routes:
 Destination	    Target	        Meaning
-10.0.0.0/16	    local	        All VPC-internal traffic stays inside
-0.0.0.0/0	    igw-abc123	    Internet-bound traffic goes to IGW
-172.31.0.0/22	tgw-xyz456	    Send to Transit Gateway
-10.1.0.0/16	    vgw-def789	    Send to VPN Gateway (on-prem)
+10.0.0.0/16	    local	         All VPC-internal traffic stays inside
+0.0.0.0/0	    igw-abc123	     Internet-bound traffic goes to IGW
+172.31.0.0/22	tgw-xyz456	     Send to Transit Gateway
+10.1.0.0/16	    vgw-def789	   Send to VPN Gateway (on-prem)
 
 # for the last entry 
 From VPC to on-prem: 
