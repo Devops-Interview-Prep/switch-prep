@@ -1,0 +1,5 @@
+1. DNS
+2. IP address & CIDR
+3. port
+4. VPC CNI env variables 
+
