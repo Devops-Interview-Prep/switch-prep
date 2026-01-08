@@ -115,3 +115,93 @@ metadata:
 
 - etcd is a strongly consistent, distributed key-value store
 
+
+# kubelete
+
+1️⃣ Node registration & heartbeat
+   - Registers the node with the cluster
+   - Sends:
+      - Node status
+      - CPU / memory
+      - Conditions (Ready, DiskPressure, etc.)
+
+2️⃣ Pod lifecycle management
+   - kubelet:
+      - Watches API server for pods assigned to this node
+      - Creates containers via container runtime
+      - Restarts containers if they crash
+      - Kills pods when deleted
+      - API Server → kubelet → containerd
+
+3️⃣ Container health checks
+   - Executes:
+      - livenessProbe
+      - readinessProbe
+      - startupProbe
+   - Reports probe results back to API server
+
+4️⃣ Volume & storage management
+   - Attaches volumes (via CSI)
+   - Mounts volumes into pods
+   - Handles unmount on pod deletion
+
+5️⃣ Secret & ConfigMap delivery
+   - Fetches secrets/configmaps from API server
+   - Mounts them as:
+      - files
+      - env vars
+
+6️⃣ Resource enforcement
+   - Applies:
+      - CPU limits (cgroups)
+      - Memory limits (OOMKill)
+   - Works with container runtime & kernel
+
+7️⃣ Log & exec APIs
+   - Enables:
+      - kubectl logs
+      - kubectl exec
+      - kubectl port-forward
+
+8️⃣ Static pods
+   - Reads pod manifests from disk
+   - Used for control plane in self-managed clusters
+
+# kube-proxy
+
+- kube-proxy implements Kubernetes Services
+- It is responsible for:
+   - Service VIP (ClusterIP)
+   - Load balancing to pods
+   - NAT rules
+- Runs as DaemonSet
+
+**kube-proxy Operating Modes**
+
+| Mode      | Used        |
+| --------- | ----------- |
+| iptables  | Most common |
+| ipvs      | High scale  |
+| userspace | Deprecated  |
+
+
+**Role of iptables / IPVS (Kernel)**
+
+- The Linux kernel does the real load balancing
+
+- iptables mode
+   - Random, per-connection selection
+   - DNAT rules
+   - Uses conntrack
+
+- IPVS mode
+   - Kernel load-balancer
+   - Supports algorithms:
+         - Round-robin
+         - Least-conn
+         - Hashing
+   - Scales better
+
+
+# Service declares, kube-proxy configures, kernel forwards
+
