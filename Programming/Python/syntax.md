@@ -56,8 +56,17 @@ type(x)
 
 ## 3. Strings
 
+- Enclosed in single ' ' or double " " quotes
+- Immutable → cannot be changed after creation
 ```python
 s = "hello"
+s[0] = "H"  ❌ ERROR (strings cannot be modified)
+```
+
+- Multiline String 
+```python
+message = """Hello
+Welcome to Python"""
 ```
 
 Operations:
@@ -67,6 +76,10 @@ s.upper()
 s.lower()
 s.replace("h", "H")
 len(s)
+
+age = 25
+age_str = str(age)
+
 ```
 
 f-Strings:
@@ -90,7 +103,12 @@ print(name, age)
 
 ## 5. Operators
 
-**Arithmetic**: `+  -  *  /  //  %  **`
+**Arithmetic**: `+  -  *  /(true devison)  //(int devison)  %  **`
+
+```python
+ 10 / 3 = 3.3 
+ 10 // 3 = 3
+ ```
 
 **Comparison**: `==  !=  >  <  >=  <=`
 
@@ -149,6 +167,27 @@ pass
 
 **List**:
 
+- A list is an ordered, changeable collection of items.
+
+```python
+empty_list = []
+fruits = ["apple", "banana", "mango"]
+numbers = [1, 2, 3, 4]
+mixed = [1, "hello", 3.5]
+chars = list("python")   # ['p', 'y', 't', 'h', 'o', 'n']
+
+fruits.append("orange")   # add item
+fruits.remove("banana")   # remove item
+fruits[0] = "grape"       # modify item
+
+print(fruits)
+
+```
+```python
+print(fruits[0])    # first item
+print(fruits[-1])   # last item
+```
+
 ```python
 nums = [1, 2, 3]
 nums.append(4)
@@ -164,22 +203,92 @@ nums[::-1]
 
 **Tuple**:
 
+- A tuple is like a list, but cannot be changed.
+
 ```python
-t = (1, 2, 3)
+empty_tuple = ()
+one_item = (10,)   # comma is required
+coordinates = 10, 20
+nums = tuple([1, 2, 3])
+coordinates = (10, 20)
+days = ("Mon", "Tue", "Wed")
+print(days[1])   # Tue
 ```
+✔ Data should not change   
+✔ Safer than lists     
+✔ Slightly faster than lists
+
+- When to use tuples
+
+✔ Coordinates      
+✔ Configuration values     
+✔ Database records
 
 **Set**:
+- A set is an unordered collection of unique elements.
+  
+```python
+empty_set = set()   # NOT {}
+nums = set([1, 2, 2, 3]) # {1,2,3}
+letters = set("hello")   # {'h', 'e', 'l', 'o'}
+numbers = {1, 2, 3, 4, 4, 5}
+print(numbers)
+
+Output:  {1, 2, 3, 4, 5}
+```
+✔ Uses curly braces {}     
+✔ No duplicates        
+✔ Unordered        
+✔ Mutable (you can add/remove items)
 
 ```python
-s = {1, 2, 3}
+numbers.add(6)
+numbers.remove(2)
 ```
+
+```python 
+a = {1, 2, 3}
+b = {3, 4, 5}
+
+print(a | b)   # Union → {1,2,3,4,5}
+print(a & b)   # Intersection → {3}
+print(a - b)   # Difference → {1,2}
+```
+
 
 **Dictionary**:
 
+- A dictionary stores data in key : value pairs.
+
+✔ Uses curly braces {}         
+✔ Keys must be unique          
+✔ Values can be anything           
+✔ Mutable
+
 ```python
+empty_dict = {}
 user = {"name": "Pawan", "age": 25}
-user["name"]
+user["name"].  # pawan
 user.get("email", "NA")
+
+
+user["age"] = 26
+user["city"] = "Bangalore"
+```
+
+```python
+
+data = [("a", 1), ("b", 2)]
+my_dict = dict(data)
+
+employee = dict(name="Amit", role="DevOps", exp=4)
+
+```
+
+- Looping 
+```python 
+for key, value in user.items():
+    print(key, value)
 ```
 
 ---
