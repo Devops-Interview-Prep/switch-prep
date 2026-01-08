@@ -210,3 +210,171 @@ TTL: 300 seconds
 - Critical failover: 30–60s
 
 - Rarely change: 3600s+
+
+# DNS Record Types (Very Important)
+
+1️⃣ A Record
+
+```
+Maps domain → IPv4
+
+example.com → 93.184.216.34
+
+
+Use case:
+
+Websites
+
+APIs
+
+```
+
+2️⃣ AAAA Record
+
+```
+
+Maps domain → IPv6
+
+example.com → 2606:2800:220:1:248:1893:25c8:1946
+
+```
+
+3️⃣ CNAME (Canonical Name)
+
+```
+
+Alias of another domain
+
+www.example.com → example.com
+
+
+Rules:
+
+Cannot coexist with other records
+
+Resolves indirectly
+
+Use case:
+
+CDNs
+
+Load balancers
+
+```
+
+4️⃣ MX (Mail Exchange)
+
+```
+
+Mail servers for a domain
+
+example.com → mail.google.com (priority 10)
+
+
+Lower number = higher priority.
+
+```
+
+5️⃣ TXT Record
+
+```
+
+Text metadata
+
+Examples:
+
+SPF
+
+DKIM
+
+Domain verification
+
+v=spf1 include:_spf.google.com ~all
+
+```
+
+6️⃣ NS (Name Server)
+
+```
+Authoritative DNS servers for the domain
+
+example.com → ns1.route53.aws
+
+```
+
+7️⃣ PTR Record (Reverse DNS)
+
+```
+
+IP → Domain
+
+93.184.216.34 → example.com
+
+
+Used in:
+
+Email validation
+
+Logging
+
+Security
+
+```
+
+8️⃣ SRV Record
+
+```
+
+Service discovery
+
+_service._proto.name → host:port
+
+
+Example:
+
+_ldap._tcp.example.com → ldap.example.com:389
+
+
+Used heavily in:
+
+Kubernetes
+
+Consul
+
+Active Directory
+
+```
+
+9️⃣ SOA (Start of Authority)
+
+```
+
+Domain metadata
+
+Contains:
+
+Primary DNS
+
+Serial number
+
+Refresh / Retry / Expiry
+
+Used for zone transfers.
+
+```
+
+# DNS Caching Layers
+
+- DNS caching exists at multiple levels:
+
+    - Browser cache
+
+    - OS cache
+
+    - Local DNS resolver
+
+    - Recursive resolver
+
+    - CDN / Load balancer
+
+- TTL applies at each layer.

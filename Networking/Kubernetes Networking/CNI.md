@@ -2,8 +2,13 @@
 
 - CNI is a specification + plugins that:
     - Create network interfaces for Pods
+    - Create network namespace
     - Assign IPs
+    - Connect Pod to Node network
     - Configure routing
+    - Enforce Network Policies
+    - Handle pod-to-pod traffic
+    - (Sometimes) NAT traffic
 
 - Kubernetes itself does not implement networking — CNI does.
 
@@ -30,6 +35,26 @@
 - Cons
     - IP exhaustion
     - AWS-specific
+
+# What Actually Happens When a Pod Starts (CNI Lifecycle)
+
+- kubelet calls CNI plugin ADD POD
+- CNI does:
+    - Creates veth pair
+    - One end → pod namespace
+    - One end → node bridge / eBPF
+    - Assigns Pod IP
+    - Adds routes
+- Pod becomes reachable
+
+# Types of CNI (How They Work Internally)
+
+🔹 Overlay CNIs (Flannel, VXLAN)
+    - Pod IP ≠ VPC IP
+    - Traffic encapsulated
+    - Pod → VXLAN → Node → VXLAN → Pod
+
+
 
 # ENI (Elastic Network Interface)
 
