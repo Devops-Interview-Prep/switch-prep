@@ -1,0 +1,52 @@
+# Application Log File
+# Generated for Bash Scripting Practice
+
+2026-01-10 10:01:02 INFO Service started
+2026-01-10 10:01:05 INFO Listening on port 8080
+2026-01-10 10:02:11 WARN Disk usage at 70%
+2026-01-10 10:03:45 ERROR Failed to connect to database
+2026-01-10 10:04:01 INFO Retrying connection
+2026-01-10 10:04:05 ERROR Connection timeout
+2026-01-10 10:05:10 INFO Connection successful
+
+User login data:
+user1,1001,/bin/bash
+user2,1002,/bin/sh
+user with space,1003,/bin/zsh
+user4,1004,/bin/bash
+
+Numbers for processing:
+10
+20
+30
+40
+50
+
+Mixed content with spaces and tabs:
+hello world
+hello    world
+hello	world
+   leading space
+trailing space   
+
+Special characters:
+path=/usr/local/bin
+windows_path=C:\Program Files\App
+json_like={"status":"ERROR","code":500}
+
+IP access logs:
+192.168.1.10 - - [10/Jan/2026:10:03:45] "GET /api/v1/users HTTP/1.1" 200 1234
+192.168.1.11 - - [10/Jan/2026:10:03:46] "POST /api/v1/login HTTP/1.1" 500 532
+192.168.1.10 - - [10/Jan/2026:10:03:47] "GET /api/v1/data HTTP/1.1" 502 231
+192.168.1.12 - - [10/Jan/2026:10:03:48] "GET /api/v1/users HTTP/1.1" 404 321
+192.168.1.10 - - [10/Jan/2026:10:03:49] "GET /api/v1/users HTTP/1.1" 500 654
+
+Key=Value config:
+enabled=false
+timeout=30
+max_retries=5
+
+Empty lines follow:
+
+
+End of file

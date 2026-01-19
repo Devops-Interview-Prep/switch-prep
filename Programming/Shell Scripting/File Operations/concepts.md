@@ -1,0 +1,25 @@
+1️⃣ Core File-Operation Concepts (Must Know)
+
+       Interviewers expect mastery of:
+
+File types (-f -d -L -p -s)
+
+Permissions & ownership
+
+File traversal
+
+File comparison / \
+
+Content search & transformation
+
+Safe file handling
+
+Large file processing
+
+Log rotation logic
+
+Atomic operations
+
+File descriptors & redirection
+
+old
