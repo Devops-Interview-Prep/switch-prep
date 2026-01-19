@@ -1,5 +1,21 @@
 Terraform Provisioners are used to performing certain custom actions and tasks either on the local machine or on the remote machine.
 
+*Terraform docs explicitly say:*
+
+    - Provisioners should be used as a last resort.
+    - Reasons:
+        - Not idempotent
+        - Hard to debug
+        - Breaks terraform plan
+        - Tightly couples infra + config
+        - Failures leave partial state
+
+    - This is why SREs prefer:
+        - user_data
+        - Packer AMIs
+        - Configuration management (Ansible, Chef)
+        - SSM
+
 **The custom actions can vary in nature and it can be -**
 
 1. Running custom shell script on the local machine
@@ -20,17 +36,42 @@ Terraform Provisioners are used to performing certain custom actions and tasks e
 
 - As the name suggests file provisioner can be used for transferring and copying the files from one machine to another machine.
 - Not only file but it can also be used for transferring/uploading the directories.
+➡️ copies a file or directory from the machine running terraform apply to a remote resource
+➡️ using an already-established connection (SSH or WinRM)
 
 ```
-provisioner "file" {
-    source      = "/home/rahul/Jhooq/keys/aws/test-file.txt"
+resource "aws_instance" "example" {
+  ami           = "ami-0abc123"
+  instance_type = "t3.micro"
+  key_name      = "my-key"
 
-    #content     = "I want to copy this string to the 
-    destination file server.txt"
+  connection {
+    type        = "ssh"
+    user        = "ec2-user"
+    private_key = file("~/.ssh/id_rsa")
+    host        = self.public_ip
+  }
 
-    destination = "/home/ubuntu/test-file.txt"
-} 
+  provisioner "file" {
+    source      = "app.conf"
+    #content    = "will copy the string to the destination"
+    destination = "/etc/app.conf"
+  }
+}
+
 ```
+
+**Internally: what actually happens**
+
+- Behind the scenes Terraform:
+
+- Uses Go SSH client
+
+- Opens an SSH session
+
+- Uses SCP-like file transfer
+
+- Copies file over the network
 
 - content - The content argument is useful when you do not want to copy or transfer the file instead you only want to copy the content or string.
 

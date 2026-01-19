@@ -78,7 +78,7 @@ ex. `terraform import aws_s3_bucket.my_bucket my-bucket-name`
 
 - It does not import the resource's history: terraform import does not import the history of the resource, so you will not be able to see the changes that were made to the resource before it was brought under Terraform management.
 
-# Remove a single resource from terraform state file
+# State Management Commands
 
 15. `terraform state list`    
     List all the resources
@@ -87,6 +87,30 @@ ex. `terraform import aws_s3_bucket.my_bucket my-bucket-name`
     
     - Previous command will remove the resource and all of its associated data from the state file. You can then use the $terraform apply command to apply the changes and remove the resource from your infrastructure.
     - It's important to note that removing a resource from the Terraform state does not destroy the resource itself. If you want to destroy the resource and remove it from your infrastructure, you will need to use the $terraform destroy command.
+
+17. `terraform state show` 
+    - Attributes of a resource in state
+    - `terraform state show aws_instance.web`
+
+18. `terraform state mv`
+    - Renames or moves resources in state
+    - Used during refactoring
+    - No infra change
+    - `terraform state mv aws_instance.old aws_instance.new`
+
+19. terraform refresh
+    - Syncs state with real infra
+    - Replaced by plan/apply
+ 
+# terraform providers
+
+17. `terraform providers`
+
+    - Shows provider dependencies
+
+# 
+
+18. 
 
 
 

@@ -3,4 +3,12 @@
 3. port
 4. VPC CNI env variables
 5. EMR  
+6. GPU 
+
+
+
+Topics to add more notes:
+
+- load balancers 
+- EC2
 

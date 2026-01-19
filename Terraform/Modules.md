@@ -11,3 +11,55 @@ If you have broken down your infrastructure into smaller and generic modules the
 
 **4. Consistency**    
  Following the best practices(encapsulation, organize, simple terraform module) will help you to achieve consistent behavior across all the different environments which will help you to reduce the debugging time and reduce the infrastructure maintenance cost.
+
+
+ # Terraform Modules (Registry / Provided Modules)
+
+- What they are
+    - Pre-built, reusable modules from Terraform Registry
+    - Written and maintained by the community or vendors
+    - Example: terraform-aws-modules/vpc/aws
+
+- When to use
+✔ Common infrastructure (VPC, EKS, RDS, IAM)
+✔ Faster delivery
+✔ Well-tested and battle-hardened code
+✔ No strong org-specific constraints
+
+- Pros
+    - Saves time
+    - Best practices baked in
+    - Versioned and documented
+    - Actively maintained
+
+- Cons
+    - Limited to exposed variables
+    - Cannot override internal resources
+    - May expose too many options for teams
+
+# Custom Modules
+
+- What they are
+  - Modules written by you or your organization
+  - Can wrap registry modules or define resources directly
+
+- When to use
+✔ Organization standards needed
+✔ Security/compliance enforcement
+✔ Repeated infra patterns
+✔ Simplifying complex setups
+✔ Multi-team Terraform usage
+
+- Pros
+    - Full control
+    - Enforces defaults
+    - Reduces misuse
+    - Easier upgrades centrally
+
+- Cons
+    - You own maintenance
+    - Needs documentation & versioning
+
+
+**Use Terraform registry modules for standard infrastructure and wrap them inside custom modules when we need organization-specific defaults, security enforcement, or reuse across teams.”**
+

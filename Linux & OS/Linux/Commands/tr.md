@@ -41,7 +41,7 @@
 
 - Delete everything except letters
 
-`tr -cd 'a-zA-Z < file.txt`
+`tr -cd 'a-zA-Z' < file.txt`
 
 
 **Special Character Classes**

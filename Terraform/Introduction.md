@@ -11,3 +11,18 @@ The core Terraform workflow consists of three stages:
 2. Plan: Terraform creates an execution plan describing the infrastructure it will create, update, or destroy based on the existing infrastructure and your configuration.
 
 3. Apply: On approval, Terraform performs the proposed operations in the correct order, respecting any resource dependencies. For example, if you update the properties of a VPC and change the number of virtual machines in that VPC, Terraform will recreate the VPC before scaling the virtual machines.
+
+
+# Terraform Cloud
+
+- Terraform Cloud is a managed Terraform platform that provides remote execution, state management, locking, access control, and policy enforcement.
+- It’s Terraform as a service.
+  
+| Problem           | Solution                |
+| ----------------- | ----------------------- |
+| State corruption  | Managed state & locking |
+| Team conflicts    | Serialized applies      |
+| Credential sprawl | Centralized secrets     |
+| Drift             | Scheduled runs          |
+| Compliance        | Policy as code          |
+
