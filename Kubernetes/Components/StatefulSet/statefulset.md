@@ -90,3 +90,143 @@
       - which abstracts the underlying storage provisioner (e.g., AWS EBS, GCP Persistent Disk, Azure Disk, Rook-Ceph, Portworx). 
       - Ensure you have a StorageClass configured in your cluster. 
       - If omitted, the default StorageClass will be used.
+
+---
+
+## StatefulSet YAML — Full Example (PostgreSQL)
+
+```yaml
+# 1. Headless Service — stable DNS per Pod
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-headless
+  labels:
+    app: postgres
+spec:
+  clusterIP: None          # headless — no virtual IP
+  selector:
+    app: postgres
+  ports:
+    - name: postgres
+      port: 5432
+---
+# 2. StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  serviceName: "postgres-headless"    # must match headless service name
+  replicas: 3
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+  volumeClaimTemplates:               # creates PVC for EACH pod
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: "gp3"
+        resources:
+          requests:
+            storage: 20Gi
+```
+
+This creates: `postgres-0`, `postgres-1`, `postgres-2` each with their own PVC (`postgres-data-postgres-0`, `postgres-data-postgres-1`, `postgres-data-postgres-2`).
+
+## DNS for StatefulSet Pods
+
+```bash
+# Pod DNS pattern:
+# <pod-name>.<headless-service>.<namespace>.svc.cluster.local
+
+postgres-0.postgres-headless.default.svc.cluster.local
+postgres-1.postgres-headless.default.svc.cluster.local
+postgres-2.postgres-headless.default.svc.cluster.local
+
+# Use this for peer discovery in distributed systems
+# Example: Kafka broker config points to:
+# kafka-0.kafka-headless.kafka.svc.cluster.local:9092
+# kafka-1.kafka-headless.kafka.svc.cluster.local:9092
+```
+
+## StatefulSet vs Deployment
+
+| Feature | StatefulSet | Deployment |
+|---------|------------|-----------|
+| Pod identity | Stable (pod-0, pod-1...) | Random (pod-abc12, pod-def34) |
+| Storage | Per-pod PVC (persistent) | Shared or ephemeral |
+| Scaling | Ordered (0→1→2) | Parallel |
+| Scale down | Reverse order (2→1→0) | Any pod deleted |
+| DNS | Per-pod DNS via headless service | Service VIP (load balanced) |
+| Use case | Databases, Kafka, Zookeeper | Stateless APIs, web servers |
+
+## Update Strategies
+
+```yaml
+spec:
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 2    # only update pods with ordinal >= 2
+                      # pods 0,1 keep old version (canary/staged rollout)
+```
+
+```bash
+# Manual rollout (update one pod at a time)
+kubectl rollout status statefulset/postgres
+
+# Force pod recreation (useful if pod is stuck)
+kubectl delete pod postgres-2
+
+# Scale StatefulSet
+kubectl scale statefulset postgres --replicas=5
+
+# Pause rollout at partition=2 (rollout only pods >= 2)
+kubectl patch statefulset postgres -p '{"spec":{"updateStrategy":{"rollingUpdate":{"partition":2}}}}'
+```
+
+## Common Interview Questions
+
+**Q: StatefulSet vs Deployment — when to use each?**
+Use Deployment for stateless apps where any pod can serve any request (APIs, web servers). Use StatefulSet when each instance needs: (1) stable hostname (peer discovery in clusters like Kafka, Zookeeper, Cassandra), (2) dedicated persistent storage that survives pod restarts, (3) ordered startup/shutdown (primary must be up before replicas). If you just need persistent storage but not stable identity, a Deployment with a single PVC can work.
+
+**Q: What happens to PVCs when you delete a StatefulSet?**
+PVCs are NOT deleted — this is intentional to prevent data loss. You must manually delete them: `kubectl delete pvc -l app=postgres`. This is one of the most common operational gotchas: after deleting and recreating a StatefulSet (e.g., for a name change), the new pods re-attach to the old PVCs if they have the same name pattern.
+
+**Q: What is the `partition` field in rolling updates?**
+`partition: N` means only pods with ordinal index >= N get the new version. Pods 0 through N-1 keep the old version. Use for canary rollouts: set partition=2 on a 3-replica StatefulSet → only pod-2 updates. After validating, set partition=0 → pods 1 and 0 update. This gives fine-grained control that Deployments don't have.

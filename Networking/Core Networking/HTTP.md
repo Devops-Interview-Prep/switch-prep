@@ -67,3 +67,71 @@
         - If a packet or message is lost or delayed, others that are queued behind it must wait, even if they are unrelated.
 
         - This is particularly harmful for real-time applications like video, voice, and games.
+
+---
+
+## Protocol Comparison
+
+| Protocol | Transport | Direction | Use case |
+|----------|-----------|-----------|---------|
+| HTTP/1.1 | TCP | Request/Response | Legacy REST APIs |
+| HTTP/2 | TCP + TLS | Multiplexed | Modern REST, gRPC |
+| HTTP/3 | QUIC (UDP) | Multiplexed | Low-latency, mobile |
+| WebSocket | TCP + TLS | Bidirectional | Chat, live dashboards |
+| gRPC | HTTP/2 + protobuf | Streaming options | Microservice RPC |
+
+## REST Status Codes to Know
+
+```
+200 OK, 201 Created, 204 No Content
+301 Moved Permanently, 302 Found
+400 Bad Request, 401 Unauthorized, 403 Forbidden
+404 Not Found, 409 Conflict, 429 Too Many Requests
+500 Internal Server Error, 502 Bad Gateway, 503 Unavailable, 504 Timeout
+```
+
+## gRPC
+
+```protobuf
+syntax = "proto3";
+service UserService {
+    rpc GetUser (GetUserRequest) returns (UserResponse);          // unary
+    rpc StreamUsers (StreamRequest) returns (stream UserResponse); // server streaming
+    rpc Chat (stream Message) returns (stream Message);            // bidirectional
+}
+```
+
+**gRPC vs REST:** Binary protobuf (smaller/faster) vs JSON, HTTP/2 multiplexing, strongly typed, streaming support. Downside: not human-readable, browser needs gRPC-Web proxy. Use gRPC internally between microservices; REST for public APIs.
+
+## WebSocket
+
+```javascript
+const socket = new WebSocket('wss://api.example.com/ws')
+socket.onopen = () => socket.send(JSON.stringify({ type: 'subscribe' }))
+socket.onmessage = (event) => console.log(JSON.parse(event.data))
+```
+
+Upgrade handshake: HTTP GET with `Upgrade: websocket` → `101 Switching Protocols`. After that, full-duplex TCP channel. Use for: chat, gaming, live price feeds. Use SSE instead when server-only push is needed (simpler, HTTP, auto-reconnect).
+
+## HTTP Caching Headers
+
+```http
+Cache-Control: max-age=3600          # cache for 1 hour
+Cache-Control: no-store              # never cache (sensitive data)
+Cache-Control: public                # CDN can cache
+Cache-Control: private               # browser only (user-specific)
+Cache-Control: s-maxage=86400        # CDN TTL (shared caches)
+ETag: "abc123"                       # version for conditional requests
+```
+
+## Common Interview Questions
+
+**Q: HTTP/2 multiplexing — what problem does it solve?**
+In HTTP/1.1, each request-response pair must complete sequentially on a connection. Browsers open 6 parallel TCP connections to work around this. HTTP/2 sends multiple requests concurrently on a single connection using streams — no need for multiple connections, better resource utilization, lower latency.
+
+**Q: gRPC vs REST — when to choose each?**
+REST: public APIs, browser clients, human-readable JSON, simple request/response. gRPC: internal microservice RPC (binary is smaller/faster), streaming (real-time updates), strong typing across multiple languages. Typical pattern: gRPC between services internally, REST API Gateway for external clients.
+
+**Q: WebSocket vs Server-Sent Events (SSE)?**
+WebSocket: bidirectional — both client and server send messages. Use for: chat, gaming, collaborative editing. SSE: server pushes to client only, works over HTTP/1.1, auto-reconnects. Use for: dashboards, news feeds, price tickers where client doesn't need to push data back. SSE scales better behind load balancers (standard HTTP connections).
+

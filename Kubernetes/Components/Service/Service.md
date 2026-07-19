@@ -98,3 +98,111 @@ redis-0.redis-headless.default.svc.cluster.local
 redis-1.redis-headless.default.svc.cluster.local
 redis-2.redis-headless.default.svc.cluster.local
 ```
+
+---
+
+## Service YAML Examples
+
+```yaml
+# ClusterIP — internal only
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+  namespace: production
+spec:
+  type: ClusterIP
+  selector:
+    app: api-server    # must match pod labels
+  ports:
+    - name: http
+      port: 80         # Service port (what clients call)
+      targetPort: 8080  # Container port (what pods listen on)
+---
+# NodePort — exposes on every node's IP:30080
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-nodeport
+spec:
+  type: NodePort
+  selector:
+    app: web
+  ports:
+    - port: 80
+      targetPort: 8080
+      nodePort: 30080    # optional: auto-assigned if omitted (30000-32767)
+---
+# LoadBalancer — creates AWS NLB/ALB
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-lb
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+spec:
+  type: LoadBalancer
+  selector:
+    app: api-server
+  ports:
+    - port: 443
+      targetPort: 8080
+---
+# ExternalName — DNS alias to external service
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-db
+spec:
+  type: ExternalName
+  externalName: prod-rds.abc123.us-east-1.rds.amazonaws.com
+```
+
+## Service Discovery
+
+```bash
+# DNS-based (recommended)
+# From pod in same namespace:
+curl http://api-service/api/v1/users
+# From pod in different namespace:
+curl http://api-service.production.svc.cluster.local/api/v1/users
+
+# Environment variables (legacy — injected at pod startup)
+# KUBERNETES_SERVICE_HOST, KUBERNETES_SERVICE_PORT etc.
+# Limitation: variables only for services that existed when pod started
+
+# Check service endpoints (which pods are registered)
+kubectl get endpoints api-service
+# ENDPOINTS: 10.0.1.5:8080,10.0.1.6:8080,10.0.1.7:8080
+```
+
+## Service vs Ingress vs LoadBalancer
+
+```mermaid
+graph TD
+    Internet --> LB["LoadBalancer Service\n(NLB L4)"]
+    Internet --> Ingress["Ingress\n(ALB/Nginx L7)"]
+    LB -->|raw TCP/UDP| Pods
+    Ingress -->|HTTP routing rules\nhost + path based| ClusterIP
+    ClusterIP -->|ClusterIP Service| Pods
+```
+
+| | ClusterIP | NodePort | LoadBalancer | Ingress |
+|--|-----------|---------|-------------|---------|
+| External access | No | Yes (via node IP) | Yes (cloud LB) | Yes (L7 routing) |
+| Layer | L4 | L4 | L4 | L7 (HTTP) |
+| Cost | Free | Free | $$$ per LB | One LB for all |
+| Use case | Internal comms | Dev/testing | Single service | Multi-service routing |
+
+## Common Interview Questions
+
+**Q: ClusterIP vs LoadBalancer — when to use each?**
+ClusterIP for inter-service communication within the cluster (no external access needed, e.g., backend DB connection). LoadBalancer when you need to expose a service externally without HTTP routing complexity (e.g., TCP services, game servers, WebSocket servers). For HTTP/HTTPS services, prefer Ingress — it uses one cloud load balancer for all services (much cheaper than one LB per service).
+
+**Q: How does a Service route to pods if pods are constantly restarting with new IPs?**
+Kubernetes maintains Endpoints objects that track current pod IPs. When a pod starts with a matching label, the Endpoints controller adds its IP. When a pod dies, it's removed. kube-proxy watches Endpoints changes and updates iptables/IPVS rules. Services always point to currently-running pods — latency of endpoint update is ~seconds.
+
+**Q: externalTrafficPolicy: Local vs Cluster?**
+`Cluster` (default): any node accepts NodePort traffic → forwards to any pod on any node via overlay. Preserves load balancing. Drawbacks: extra hop, source IP is SNAT'd. `Local`: only nodes with matching pods accept traffic. Preserves client source IP (no SNAT). Drawback: uneven load distribution (if pod is on 2 of 5 nodes, those 2 nodes get all traffic). Use `Local` when you need the real client IP in your application.
+

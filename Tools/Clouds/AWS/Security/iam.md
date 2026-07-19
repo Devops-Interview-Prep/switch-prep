@@ -167,3 +167,173 @@ AWS Support	            Web Identity Federation,        	SAML Federation for IAM
         - This token is mounted into the pod at:
          `/var/run/secrets/eks.amazonaws.com/serviceaccount/token`
         - AWS SDKs inside the pod (Go, Python, Node, etc.) will: Read the token > Call sts:AssumeRoleWithWebIdentity > Get temporary IAM credentials > Use those to access AWS APIs
+
+---
+
+## IAM Architecture Overview
+
+```mermaid
+graph TD
+    User["IAM User / Role / Service"] -->|authenticated| STS["AWS STS\n(Secure Token Service)"]
+    STS -->|temp credentials| Resources["AWS Resources\n(S3, EC2, RDS...)"]
+
+    subgraph "Authorization Evaluation"
+        Req["API Request"] --> SCPs["SCPs\n(Organizations — max boundary)"]
+        SCPs --> Boundary["Permissions Boundary\n(IAM max boundary)"]
+        Boundary --> Identity["Identity Policy\n(user/role policy)"]
+        Identity --> Resource["Resource Policy\n(bucket policy, etc.)"]
+        Resource --> Allow["✅ Allow"]
+    end
+```
+
+## IAM Policy Evaluation Logic
+
+**Deny always wins.** AWS evaluates in this order:
+
+```
+1. Explicit Deny anywhere → DENY
+2. SCPs allow? → if NO → DENY
+3. Permissions Boundary allows? → if NO → DENY
+4. Session Policy allows? → if NO → DENY
+5. Identity Policy OR Resource Policy allows? → if YES → ALLOW
+6. Otherwise → DENY (implicit deny)
+```
+
+## Permissions Boundary
+
+Limits the maximum permissions a user or role can have, even if they have a broader IAM policy:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:*", "ec2:Describe*"],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+```bash
+# Create role with permissions boundary (sandbox devs can't exceed this)
+aws iam create-role \
+  --role-name SandboxDeveloper \
+  --assume-role-policy-document file://trust.json \
+  --permissions-boundary arn:aws:iam::123:policy/SandboxBoundary
+```
+
+Even if the role is given `AdministratorAccess`, they can only do what the boundary allows.
+
+## IAM Roles — Common Patterns
+
+### Cross-Account Role
+
+```json
+// Trust policy on Role in Account B — allows Account A to assume it
+{
+  "Effect": "Allow",
+  "Principal": {
+    "AWS": "arn:aws:iam::ACCOUNT-A:role/MyRole"
+  },
+  "Action": "sts:AssumeRole"
+}
+```
+
+```bash
+# Assume cross-account role
+aws sts assume-role \
+  --role-arn arn:aws:iam::ACCOUNT-B:role/CrossAccountRole \
+  --role-session-name my-session \
+  --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]'
+```
+
+### Service Role
+
+```json
+// Trust policy: only EC2 can assume this role
+{
+  "Effect": "Allow",
+  "Principal": {"Service": "ec2.amazonaws.com"},
+  "Action": "sts:AssumeRole"
+}
+```
+
+Instance Profile wraps the service role and attaches it to EC2 instances.
+
+## IAM Best Practices
+
+| Practice | Why |
+|----------|-----|
+| **Never use root** | Root has all permissions, no MFA by default — lock away keys immediately |
+| **MFA on all human users** | Stolen credentials are useless without MFA |
+| **Use roles, not users** | Roles have no long-term credentials — automatically rotated |
+| **Least privilege** | Start with minimal permissions, add as needed |
+| **Resource-based policies** | Prefer S3 bucket policies for cross-account vs complex IAM |
+| **Conditions** | Add MFA conditions, IP conditions, time conditions |
+| **CloudTrail** | All IAM API calls logged automatically |
+| **Access Analyzer** | Identify resources accessible from outside account |
+
+## IAM Access Analyzer
+
+```bash
+# Find externally accessible resources (S3, SQS, KMS, Secrets Manager...)
+aws accessanalyzer create-analyzer \
+  --analyzer-name my-org-analyzer \
+  --type ORGANIZATION     # or ACCOUNT
+
+# List findings (external access)
+aws accessanalyzer list-findings \
+  --analyzer-arn arn:aws:access-analyzer:us-east-1:123:analyzer/my-org-analyzer
+
+# Generate least-privilege policy from CloudTrail
+aws accessanalyzer generate-policy \
+  --cloudtrail-details '{
+    "trailArn": "arn:aws:cloudtrail:us-east-1:123:trail/my-trail",
+    "startTime": "2026-06-01T00:00:00Z",
+    "endTime": "2026-06-16T00:00:00Z"
+  }'
+```
+
+## Common IAM Conditions
+
+```json
+// Require MFA
+"Condition": {
+  "BoolIfExists": {"aws:MultiFactorAuthPresent": "true"}
+}
+
+// Restrict to specific region
+"Condition": {
+  "StringEquals": {"aws:RequestedRegion": "us-east-1"}
+}
+
+// Require specific tags on resources being created
+"Condition": {
+  "StringEquals": {
+    "aws:RequestTag/Environment": "production",
+    "aws:RequestTag/Team": "platform"
+  }
+}
+
+// Source IP restriction
+"Condition": {
+  "IpAddress": {"aws:SourceIp": ["10.0.0.0/8", "203.0.113.0/24"]}
+}
+```
+
+## Common Interview Questions
+
+**Q: IAM evaluation order — what wins, Allow or Deny?**
+Explicit Deny always wins, in any policy at any level. Evaluation: (1) Explicit Deny anywhere → DENY. (2) SCP allows? → if not → DENY. (3) Permissions Boundary allows? → if not → DENY. (4) Identity or Resource Policy allows? → ALLOW. Otherwise → implicit DENY. Adding an explicit Deny is a stronger guarantee than removing an Allow.
+
+**Q: IRSA (IAM Roles for Service Accounts) — how does it work?**
+The EKS OIDC provider is registered in AWS IAM. A K8s ServiceAccount is annotated with an IAM role ARN. When a pod uses that SA, EKS injects a projected volume with a JWT token signed by the OIDC provider. The AWS SDK in the pod calls `sts:AssumeRoleWithWebIdentity` with the JWT. STS verifies the token with the EKS OIDC endpoint, validates the `sub` claim matches the namespace/SA, and returns temporary credentials. No static keys anywhere.
+
+**Q: Permissions Boundary vs SCP — what's the difference?**
+Permissions Boundary: applied to an individual IAM user or role — limits what that entity can do even if given broader policies. SCP: applied to an AWS account or OU in Organizations — limits what any identity in that account can do. SCPs are an account-level ceiling; Permissions Boundaries are a user/role-level ceiling. Both can constrain but neither grants permissions.
+
+**Q: What is an IAM Access Analyzer and when should you use it?**
+It analyzes resource-based policies to find resources accessible from outside your account or organization (potential unintended public or cross-account access). Run it continuously (not just at deployment) since policies can drift. Use it to: audit existing S3 bucket policies, find publicly accessible SQS queues, identify KMS keys shared with unknown accounts. The policy generation feature analyzes CloudTrail events to generate minimum-privilege policies for roles.
+
