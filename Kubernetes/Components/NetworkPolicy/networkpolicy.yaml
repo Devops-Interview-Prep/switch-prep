@@ -1,0 +1,159 @@
+# ---------------------------------------------------------------------------
+# 1. DEFAULT-DENY-ALL (both directions) — baseline zero-trust for a namespace.
+#    Selects every pod (empty podSelector) but allows nothing because the
+#    ingress/egress arrays are empty. This is the "opt-in" policy that flips
+#    the namespace from flat-network to default-deny.
+# ---------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: production
+spec:
+  podSelector: {}          # empty selector = ALL pods in this namespace
+  policyTypes:
+    - Ingress
+    - Egress              # explicit — don't rely on inference
+---
+# ---------------------------------------------------------------------------
+# 2. ALLOW-DNS-EGRESS — MANDATORY companion to any default-deny-egress policy.
+#    Without this, every pod loses DNS resolution immediately (CoreDNS runs
+#    in kube-system, so pods can't reach it once egress is default-denied).
+# ---------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: production
+spec:
+  podSelector: {}          # applies to all pods — everyone needs DNS
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system   # built-in label, always present
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns   # CoreDNS pod label (AND with namespaceSelector above)
+      ports:
+        - protocol: UDP
+          port: 53      # standard DNS resolution
+        - protocol: TCP
+          port: 53      # DNS over TCP (large responses, zone transfers)
+---
+# ---------------------------------------------------------------------------
+# 3. NAMESPACE-SCOPED INGRESS — only allow traffic from pods in the same
+#    namespace, plus from the ingress-controller namespace (for pods that
+#    are meant to be reachable from outside via an Ingress/LB).
+#    Demonstrates podSelector + namespaceSelector AND logic vs multiple
+#    `from` entries being OR'd together.
+# ---------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace-and-ingress-controller
+  namespace: production
+spec:
+  podSelector: {}          # applies to all pods in "production"
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}                    # entry 1: any pod...
+          namespaceSelector:                  # ...AND in this same namespace
+            matchLabels:
+              kubernetes.io/metadata.name: production
+        - namespaceSelector:                  # entry 2 (OR'd with entry 1 above):
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx   # traffic from ingress controller ns
+      # Note: the two bullet items under `from` are separate array entries → OR.
+      # Inside a single entry, podSelector + namespaceSelector together → AND.
+---
+# ---------------------------------------------------------------------------
+# 4. RESTRICT INGRESS to a specific app on a specific port (typical
+#    micro-segmentation rule: only "checkout" service may call "payments").
+# ---------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: payments-allow-from-checkout
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      app: payments        # this policy governs traffic TO payments pods
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: checkout   # only pods labeled app=checkout, same namespace
+      ports:
+        - protocol: TCP
+          port: 8443
+---
+# ---------------------------------------------------------------------------
+# 5. EGRESS TO EXTERNAL SaaS via ipBlock, with `except` carving out a
+#    sub-range (e.g., the vendor's published CIDR minus a reserved
+#    management sub-block you don't want reachable).
+# ---------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-to-payment-gateway
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      app: payments
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 203.0.113.0/24       # vendor's published SaaS API CIDR range
+            except:
+              - 203.0.113.240/28       # vendor's internal mgmt range — not allowed
+      ports:
+        - protocol: TCP
+          port: 443
+    # Remember: egress to CoreDNS (UDP/TCP 53) must ALSO be allowed separately,
+    # otherwise this pod can't even resolve the SaaS hostname before connecting
+    # (unless it connects by raw IP, which is rare in practice).
+---
+# ---------------------------------------------------------------------------
+# 6. CiliumNetworkPolicy (CRD) — shown for contrast only, requires Cilium CNI.
+#    L7-aware: restrict to specific HTTP method+path, and DNS-aware egress
+#    (allow by FQDN instead of a static, brittle CIDR).
+# ---------------------------------------------------------------------------
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: payments-l7-and-fqdn-egress
+  namespace: production
+spec:
+  endpointSelector:
+    matchLabels:
+      app: payments
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+              app: checkout
+      toPorts:
+        - ports:
+            - port: "8443"
+              protocol: TCP
+          rules:
+            http:
+              - method: "POST"
+                path: "/api/v1/charge"   # only this exact method+path allowed — true L7 zero-trust
+  egress:
+    - toFQDNs:
+        - matchName: "api.stripe.com"    # allow by hostname, not a static/brittle CIDR
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP

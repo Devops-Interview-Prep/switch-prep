@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluent-bit
+  namespace: kube-system
+  labels:
+    app: fluent-bit
+spec:
+  selector:
+    matchLabels:
+      app: fluent-bit          # must match template labels exactly
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1        # update 1 node's agent pod at a time
+  template:
+    metadata:
+      labels:
+        app: fluent-bit
+    spec:
+      serviceAccountName: fluent-bit
+      priorityClassName: system-node-critical   # protects agent from preemption under node pressure
+      tolerations:
+        # Required to run on the control-plane node(s) — untainted pods are repelled by default.
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/master     # legacy taint key, still seen on older clusters
+          operator: Exists
+          effect: NoSchedule
+        # Note: NoExecute tolerations for node.kubernetes.io/not-ready and
+        # node.kubernetes.io/unreachable are NOT listed here — the DaemonSet controller
+        # injects them automatically with tolerationSeconds omitted (tolerate forever),
+        # so this pod isn't evicted during transient node conditions.
+      containers:
+        - name: fluent-bit
+          image: fluent/fluent-bit:2.2
+          resources:
+            requests:                 # small per-pod ask, but multiplied by every node in the fleet
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          env:
+            - name: NODE_NAME         # so shipped logs/metrics can be tagged with source node
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: varlog
+              mountPath: /var/log
+              readOnly: true
+            - name: varlibdockercontainers
+              mountPath: /var/lib/docker/containers
+              readOnly: true
+            - name: fluent-bit-config
+              mountPath: /fluent-bit/etc/
+      terminationGracePeriodSeconds: 10
+      volumes:
+        - name: varlog
+          hostPath:
+            path: /var/log            # host node's log directory
+        - name: varlibdockercontainers
+          hostPath:
+            path: /var/lib/docker/containers   # container stdout/stderr log files
+        - name: fluent-bit-config
+          configMap:
+            name: fluent-bit-config
+---
+# Companion example: targeting only a SUBSET of nodes (e.g., GPU nodes) via nodeSelector.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nvidia-device-plugin
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: nvidia-device-plugin
+  template:
+    metadata:
+      labels:
+        app: nvidia-device-plugin
+    spec:
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      nodeSelector:
+        accelerator: nvidia-gpu       # only schedules onto nodes carrying this label
+      containers:
+        - name: nvidia-device-plugin-ctr
+          image: nvcr.io/nvidia/k8s-device-plugin:v0.14.5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
+          volumeMounts:
+            - name: device-plugin
+              mountPath: /var/lib/kubelet/device-plugins
+      volumes:
+        - name: device-plugin
+          hostPath:
+            path: /var/lib/kubelet/device-plugins

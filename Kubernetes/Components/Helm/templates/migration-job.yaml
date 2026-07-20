@@ -1,0 +1,30 @@
+{{- if .Values.migration.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # Fixed, deterministic name (not name-templated with a random suffix) is
+  # required for hook-delete-policy=before-hook-creation to find and remove
+  # the previous run's Job before creating this one.
+  name: {{ include "api-server.fullname" . }}-migration
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "api-server.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-upgrade,pre-install       # run before both first install and every upgrade
+    helm.sh/hook-weight: "0"                    # lower weight = earlier, relative to other hooks of same type
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    # before-hook-creation: delete leftover Job from a prior release before
+    #   this one runs (Job.spec is immutable, so a stale Job with the same
+    #   name would make apply fail outright).
+    # hook-succeeded: clean up automatically once it passes, so it doesn't
+    #   linger and clutter `kubectl get jobs`.
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: {{ .Values.migration.image }}
+          command: ["./migrate", "up"]
+{{- end }}

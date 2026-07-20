@@ -1,0 +1,99 @@
+# ConstraintTemplate: reusable Rego logic + input schema.
+# One template, many Constraints (different labels, different scopes).
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequiredlabels
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRequiredLabels          # the Kind that Constraints of this template will use
+      validation:
+        # openAPIV3Schema defines the `parameters` a Constraint instance can pass in
+        openAPIV3Schema:
+          type: object
+          properties:
+            labels:
+              type: array
+              items:
+                type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8srequiredlabels
+
+        violation[{"msg": msg}] {
+          provided := {label | input.review.object.metadata.labels[label]}
+          required := {label | label := input.parameters.labels[_]}
+          missing := required - provided
+          count(missing) > 0
+          msg := sprintf("missing required labels: %v", [missing])
+        }
+
+---
+# Constraint: an INSTANCE of the template above, with concrete parameters + scope.
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredLabels
+metadata:
+  name: require-cost-center-label
+spec:
+  enforcementAction: dryrun            # deny | dryrun | warn — start every new policy here
+  match:
+    kinds:
+      - apiGroups: ["apps"]
+        kinds: ["Deployment"]
+    namespaces:                        # scope to specific namespaces (omit = cluster-wide)
+      - production
+      - staging
+  parameters:
+    labels:
+      - "cost-center"
+      - "team"
+
+---
+# Second policy: disallow the :latest image tag.
+# Different concern, same two-object pattern (template + constraint).
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8sdisallowedtags
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sDisallowedTags
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            tags:
+              type: array
+              items:
+                type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8sdisallowedtags
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.template.spec.containers[_]
+          tag := split(container.image, ":")[1]
+          tag == input.parameters.tags[_]
+          msg := sprintf("image '%v' uses a disallowed tag ('%v') — pin to a digest or immutable version", [container.image, tag])
+        }
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sDisallowedTags
+metadata:
+  name: no-latest-tag
+spec:
+  enforcementAction: deny              # this one's already proven safe in dryrun — block it
+  match:
+    kinds:
+      - apiGroups: ["apps"]
+        kinds: ["Deployment"]
+  parameters:
+    tags:
+      - "latest"

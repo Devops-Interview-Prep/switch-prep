@@ -1,0 +1,40 @@
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: worker-vpa
+  namespace: production
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: worker
+  updatePolicy:
+    updateMode: "Off"          # Off = recommendations only, nothing applied automatically.
+    # Start every new VPA in "Off" in production. Watch `kubectl describe vpa` through at
+    # least one full traffic cycle (including peak) before ever flipping to Auto/Recreate.
+    # Other modes:
+    #   Initial  — apply recommendation only at pod creation, never touch running pods
+    #   Recreate — apply at creation AND evict/recreate running pods that drift out of range
+    #   Auto     — currently behaves like Recreate (reserved for future in-place resize)
+  resourcePolicy:
+    containerPolicies:
+      - containerName: "*"           # apply to every container in the pod
+        minAllowed:
+          cpu: 100m
+          memory: 128Mi
+        maxAllowed:
+          cpu: "4"
+          memory: 8Gi
+        controlledResources: ["cpu", "memory"]
+        controlledValues: RequestsAndLimits   # or RequestsOnly to leave limits untouched
+---
+# DO NOT also point an HPA at CPU/memory utilization for this same Deployment.
+# VPA raising the CPU *request* changes the denominator of HPA's utilization %
+# (utilization = usage / request), which can make HPA scale pods down right as
+# VPA scales them up — a thrash loop with no equilibrium. Safe pairing: HPA on
+# a custom/external metric (RPS, queue depth) + VPA owning CPU/memory requests.
+#
+# Verify:
+#   kubectl describe vpa worker-vpa
+#   kubectl get vpa worker-vpa -o jsonpath='{.status.recommendation}' | jq .
+#   kubectl get hpa,vpa -n production   # confirm no HPA targets the same resource+metric

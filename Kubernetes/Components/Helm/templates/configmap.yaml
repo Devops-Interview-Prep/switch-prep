@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "api-server.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "api-server.labels" . | nindent 4 }}
+data:
+  environment: {{ .Values.global.environment | quote }}
+  # .Files lets a template read a non-template file shipped inside the chart
+  # (e.g. chart/files/app.conf) and inline its raw content — useful for
+  # embedding a full config file without hand-templating every line of it.
+  {{- if .Files.Glob "files/app.conf" }}
+  app.conf: |-
+    {{- .Files.Get "files/app.conf" | nindent 4 }}
+  {{- end }}

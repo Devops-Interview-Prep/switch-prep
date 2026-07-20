@@ -1,0 +1,22 @@
+# Strategic merge patch — only the fields listed here are merged into the base
+# Deployment. Everything else in base/deployment.yaml (probes, resources, ports)
+# is left untouched.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-server
+spec:
+  template:
+    spec:
+      containers:
+        - name: api
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          env:
+            - name: ENVIRONMENT
+              value: production

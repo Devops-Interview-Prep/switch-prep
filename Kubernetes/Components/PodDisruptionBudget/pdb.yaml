@@ -1,0 +1,116 @@
+# ---------------------------------------------------------------------------
+# Example 1: minAvailable (absolute) — quorum-based system (etcd-like, 3 nodes)
+# Never allow more than 1 to be voluntarily evicted at a time; 2 of 3 must
+# always stay up to preserve quorum.
+# ---------------------------------------------------------------------------
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: etcd-pdb
+  namespace: kube-system
+spec:
+  minAvailable: 2          # absolute count — 2 of 3 replicas must remain healthy
+  selector:
+    matchLabels:
+      app: etcd            # must EXACTLY match pod labels, or this is a no-op
+---
+# ---------------------------------------------------------------------------
+# Example 2: minAvailable (percentage) — stateless API fleet, HA requirement
+# Percentage rounds UP (ceil): 50% of 10 replicas -> 5 must stay available,
+# so at most 5 can be evicted concurrently.
+# ---------------------------------------------------------------------------
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-server-pdb
+  namespace: production
+spec:
+  minAvailable: 50%
+  selector:
+    matchLabels:
+      app: api-server
+---
+# ---------------------------------------------------------------------------
+# Example 3: maxUnavailable (absolute) — large stateless fleet, favor drain
+# throughput over strict availability floor. Only 1 pod down at a time
+# regardless of total replica count.
+# ---------------------------------------------------------------------------
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: worker-pdb
+  namespace: production
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: batch-worker
+---
+# ---------------------------------------------------------------------------
+# Example 4: maxUnavailable (percentage) — large fleet, proportional tolerance.
+# Percentage rounds DOWN (floor): 25% of 10 replicas -> floor(2.5) = 2 pods
+# may be unavailable at once.
+# ---------------------------------------------------------------------------
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend-pdb
+  namespace: production
+spec:
+  maxUnavailable: 25%
+  selector:
+    matchLabels:
+      app: frontend
+---
+# ---------------------------------------------------------------------------
+# Example 5: THE SINGLE-REPLICA GOTCHA — DO NOT DO THIS
+# With replicas: 1 and minAvailable: 1, disruptionsAllowed is PERMANENTLY 0.
+# This pod can never be voluntarily evicted -> node drains/upgrades/CA
+# scale-down involving this pod's node will stall indefinitely.
+# ---------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: legacy-singleton
+  namespace: production
+spec:
+  replicas: 1              # <-- single replica
+  selector:
+    matchLabels:
+      app: legacy-singleton
+  template:
+    metadata:
+      labels:
+        app: legacy-singleton
+    spec:
+      containers:
+        - name: app
+          image: my-registry/legacy-singleton:v1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: legacy-singleton-pdb-BAD
+  namespace: production
+spec:
+  minAvailable: 1          # BAD: with replicas=1 this blocks ALL voluntary eviction forever
+  selector:
+    matchLabels:
+      app: legacy-singleton
+---
+# ---------------------------------------------------------------------------
+# Example 6: FIX for the single-replica gotcha — genuinely single-instance,
+# downtime-tolerant workload. maxUnavailable: 1 still evaluates to "1 pod may
+# be down" (i.e. no real protection), but unlike minAvailable:1 it does NOT
+# block drains forever. Prefer this ONLY if replicas cannot be raised to 2+.
+# ---------------------------------------------------------------------------
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: legacy-singleton-pdb-FIXED
+  namespace: production
+spec:
+  maxUnavailable: 1        # allows the single pod to be evicted; drains won't stall
+  selector:
+    matchLabels:
+      app: legacy-singleton

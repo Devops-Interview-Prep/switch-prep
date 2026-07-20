@@ -1,0 +1,38 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namePrefix: prod-
+
+commonLabels:
+  environment: production
+
+# Bump replicas for prod without touching base/deployment.yaml at all
+replicas:
+  - name: api-server
+    count: 5
+
+# Override the image tag per environment — CI just needs to set this per pipeline run
+images:
+  - name: my-registry/api-server
+    newTag: v1.4.2
+
+# Strategic merge patch for resource requests/limits + env var
+patches:
+  - path: patch.yaml
+    target:
+      kind: Deployment
+      name: api-server
+
+# Prod-specific config values layered on top of the base ConfigMap.
+# Kustomize merges this generator's literals into the same-named generator
+# from base, then hash-suffixes the result — the Deployment's envFrom
+# reference is rewritten automatically to the new hashed name.
+configMapGenerator:
+  - name: app-config
+    behavior: merge
+    literals:
+      - LOG_LEVEL=warn
+      - FEATURE_X=enabled

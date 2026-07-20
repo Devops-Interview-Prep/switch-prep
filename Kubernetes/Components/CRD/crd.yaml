@@ -1,0 +1,145 @@
+# CustomResourceDefinition: registers a new `kind: Certificate` under the
+# custom API group "certs.example.com". This alone is INERT — it only teaches
+# the API server how to store/validate/serve the object. Nothing reconciles it
+# without a controller (see CustomResourcesCRD.md).
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: certificates.certs.example.com   # MUST be <plural>.<group>
+spec:
+  group: certs.example.com
+  scope: Namespaced                       # or Cluster (e.g. ClusterIssuer-style resources)
+  names:
+    plural: certificates
+    singular: certificate
+    kind: Certificate
+    shortNames:
+      - cert                              # enables `kubectl get cert`
+    categories:
+      - all                               # shows up in `kubectl get all` style aggregate views
+  versions:
+    - name: v1alpha1
+      served: true                        # exposed via the API (clients can call it)
+      storage: false                      # NOT the version etcd persists — converted to v1 on write/read
+      deprecated: true                    # signals clients to migrate; kubectl warns on use
+      deprecationWarning: "certs.example.com/v1alpha1 Certificate is deprecated; use v1"
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                dnsName:
+                  type: string
+                issuerRef:
+                  type: string
+      subresources:
+        status: {}
+    - name: v1
+      served: true
+      storage: true                       # exactly ONE version across the whole list may set this true
+      schema:
+        openAPIV3Schema:                  # structural schema — API server validates/rejects at the API layer
+          type: object
+          required: ["spec"]
+          properties:
+            spec:
+              type: object
+              required: ["dnsNames", "issuerRef", "secretName"]
+              properties:
+                dnsNames:
+                  type: array             # v1 renamed dnsName -> dnsNames (list); conversion webhook bridges this
+                  items:
+                    type: string
+                  minItems: 1
+                duration:
+                  type: string
+                  pattern: "^[0-9]+(h|m|s)$"   # e.g. "2160h" for 90 days
+                  default: "2160h"
+                renewBefore:
+                  type: string
+                  default: "360h"
+                issuerRef:
+                  type: object
+                  required: ["name", "kind"]
+                  properties:
+                    name:
+                      type: string
+                    kind:
+                      type: string
+                      enum: ["Issuer", "ClusterIssuer"]
+                secretName:
+                  type: string             # where the controller writes the issued cert+key
+            status:
+              type: object
+              properties:
+                conditions:                # well-behaved operators populate this — see doc
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", "Unknown"]
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                notAfter:
+                  type: string
+                  format: date-time
+      additionalPrinterColumns:            # controls `kubectl get certificate` output columns
+        - name: Ready
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Ready")].status
+        - name: Secret
+          type: string
+          jsonPath: .spec.secretName
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      subresources:
+        status: {}                         # enables `/status` subresource — spec and status update independently
+
+  # Only required when >1 served version AND schemas are NOT trivially compatible.
+  # "None" strategy (the default if omitted) just returns objects unchanged across
+  # versions — only safe when the versions really are wire-compatible (e.g. pure
+  # additions with defaults). Here v1alpha1 -> v1 renamed a field, so None would
+  # silently drop data; a real conversion webhook is required.
+  conversion:
+    strategy: Webhook
+    webhook:
+      clientConfig:
+        service:
+          namespace: cert-operator-system
+          name: cert-operator-webhook
+          path: /convert
+          port: 443
+        caBundle: <base64-encoded-CA-cert>
+      conversionReviewVersions: ["v1", "v1alpha1"]
+
+---
+# Example custom resource instance of the CRD above.
+apiVersion: certs.example.com/v1
+kind: Certificate
+metadata:
+  name: api-tls-cert
+  namespace: production
+spec:
+  dnsNames:
+    - api.example.com
+    - www.example.com
+  duration: 2160h              # 90 days
+  renewBefore: 360h            # renew 15 days before expiry
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  secretName: api-tls-cert-secret
+# status is NOT set here — it's owned by the controller, written via the
+# /status subresource after it reconciles this object at least once.

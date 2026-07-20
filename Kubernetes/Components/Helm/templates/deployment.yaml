@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "api-server.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "api-server.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}      # ignored entirely if HPA manages this object
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "api-server.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        # Forces a rollout when the ConfigMap content changes, since the
+        # Deployment controller only reacts to changes in the pod template
+        # itself, not to referenced objects. sha256sum over the *rendered*
+        # configmap.yaml means any value change here changes this annotation.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "api-server.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "api-server.serviceAccountName" . }}
+      containers:
+        - name: {{ .Chart.Name }}
+          # .Values.image.tag defaults to the chart's AppVersion when unset —
+          # this is the version/appVersion split in practice: a chart bump
+          # (version) doesn't require an app image bump (appVersion), and
+          # this `default` call is what lets an operator override just the
+          # image tag via --set without touching Chart.yaml at all.
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.targetPort }}
+          env:
+            - name: ENVIRONMENT
+              value: {{ .Values.global.environment | quote }}   # set via `global`, visible to subcharts too
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Capabilities.APIVersions.Has "autoscaling/v2" }}
+          # example of gating a manifest fragment on what the target cluster
+          # actually supports, queried live via .Capabilities — not something
+          # `helm template` (no cluster contact) can evaluate accurately
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

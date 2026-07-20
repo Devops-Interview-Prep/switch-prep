@@ -1,0 +1,144 @@
+# Realistic host + path based routing example with TLS termination.
+# Two hostnames share one Ingress/LB; api.example.com is further split by path prefix.
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: shop-ingress
+  namespace: production
+  annotations:
+    # Controller-specific! Only means something to ingress-nginx (see Ingress.md #5).
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # cert-manager watches this annotation and creates a Certificate + Order + Challenge
+    # automatically instead of you hand-rotating a cert.
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx  # binds this Ingress to the IngressClass -> controller mapping
+  tls:
+    - hosts:
+        - www.example.com
+        - api.example.com
+      secretName: example-tls  # type: kubernetes.io/tls, populated by cert-manager
+  rules:
+    # --- Host-based routing: www.example.com goes entirely to the frontend ---
+    - host: www.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend-svc
+                port:
+                  number: 80
+
+    # --- Host-based + path-based routing combined on api.example.com ---
+    - host: api.example.com
+      http:
+        paths:
+          - path: /v1/orders
+            pathType: Prefix        # matches /v1/orders and /v1/orders/123, not /v1/ordersxyz
+            backend:
+              service:
+                name: orders-svc
+                port:
+                  number: 8080
+          - path: /v1/payments
+            pathType: Prefix
+            backend:
+              service:
+                name: payments-svc
+                port:
+                  number: 8080
+          - path: /healthz
+            pathType: Exact          # must match exactly, no /healthz/anything
+            backend:
+              service:
+                name: status-svc
+                port:
+                  number: 8080
+          # ImplementationSpecific + nginx regex capture group, paired with the
+          # rewrite-target annotation above: strips /legacy-api prefix before proxying.
+          - path: /legacy-api(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: legacy-svc
+                port:
+                  number: 8080
+
+---
+# The Secret referenced by spec.tls above. In practice this is created/renewed
+# automatically by cert-manager's Certificate CRD — shown here for completeness,
+# you would not normally author this by hand.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: example-tls
+  namespace: production
+type: kubernetes.io/tls
+data:
+  tls.crt: <base64-encoded-cert>
+  tls.key: <base64-encoded-key>
+
+---
+# cert-manager side: this is what actually produces the Secret above.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: example-tls-cert
+  namespace: production
+spec:
+  secretName: example-tls
+  dnsNames:
+    - www.example.com
+    - api.example.com
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: sre-team@example.com
+    privateKeySecretRef:
+      name: letsencrypt-prod-key
+    solvers:
+      - http01:                     # ACME HTTP-01 challenge
+          ingress:
+            ingressClassName: nginx  # solver spins up temp Ingress rule to prove domain ownership
+
+---
+# --- AWS ALB variant of the same idea, for comparison ---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: shop-ingress-alb
+  namespace: production
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing        # vs "internal"
+    alb.ingress.kubernetes.io/target-type: ip                # routes straight to pod IPs (VPC CNI), bypasses kube-proxy
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:123456789012:certificate/abcd-1234
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    # Consolidates multiple Ingress objects onto ONE physical ALB instead of
+    # provisioning a separate ALB (and separate $ cost) per Ingress.
+    alb.ingress.kubernetes.io/group.name: shop-external
+spec:
+  ingressClassName: alb
+  rules:
+    - host: api.example.com
+      http:
+        paths:
+          - path: /v1/orders
+            pathType: Prefix
+            backend:
+              service:
+                name: orders-svc
+                port:
+                  number: 8080

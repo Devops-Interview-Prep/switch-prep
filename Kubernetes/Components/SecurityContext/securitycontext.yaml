@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hardened-app
+  namespace: production
+  labels:
+    app: hardened-app
+spec:
+  securityContext:                     # pod-level: defaults for every container below
+    runAsNonRoot: true                 # admission-time gate — rejects if effective UID resolves to 0
+    runAsUser: 10001                   # explicit non-root UID (belt + suspenders with runAsNonRoot)
+    runAsGroup: 10001
+    fsGroup: 20000                     # kubelet chowns/chmods mounted volumes to this GID
+    fsGroupChangePolicy: OnRootMismatch  # skip recursive chown on restart if perms already correct
+    seccompProfile:
+      type: RuntimeDefault              # baseline syscall filter from the container runtime
+  containers:
+    - name: app
+      image: my-registry/app:v2.4.0
+      ports:
+        - containerPort: 8080
+      securityContext:                  # container-level: overrides pod-level for THIS container only
+        allowPrivilegeEscalation: false # blocks setuid-style privilege gain (e.g. sudo binaries)
+        privileged: false               # never true unless this is a host-level infra DaemonSet
+        readOnlyRootFilesystem: true    # writable layer is sealed; app must use mounted volumes to write
+        capabilities:
+          drop:
+            - ALL                       # strip the full default capability set first
+          add:
+            - NET_BIND_SERVICE          # only add back what's actually needed (bind :80/:443 as non-root)
+      volumeMounts:
+        - name: tmp
+          mountPath: /tmp                # writable scratch space despite readOnlyRootFilesystem
+        - name: cache
+          mountPath: /app/cache           # app-specific writable path, mounted explicitly
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          cpu: "500m"
+          memory: "512Mi"
+  volumes:
+    - name: tmp
+      emptyDir: {}                       # ephemeral, wiped on pod restart — fine for scratch/tmp
+    - name: cache
+      emptyDir:
+        sizeLimit: 256Mi                 # bound the size so a runaway cache can't exhaust node disk

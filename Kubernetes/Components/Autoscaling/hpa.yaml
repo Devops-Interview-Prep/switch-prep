@@ -1,0 +1,69 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-server-hpa
+  namespace: production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-server
+  minReplicas: 3          # never scale below this, even at zero load
+  maxReplicas: 20          # hard ceiling regardless of metric pressure
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60   # % of requested CPU, not limit — requests must be set correctly
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+    - type: Pods
+      pods:
+        metric:
+          name: http_requests_per_second   # served by Prometheus Adapter (custom.metrics.k8s.io)
+        target:
+          type: AverageValue
+          averageValue: "500"              # per-pod average, not a cluster-wide total
+    - type: External
+      external:
+        metric:
+          name: sqs_queue_messages_visible  # served by Prometheus Adapter (external.metrics.k8s.io)
+          selector:
+            matchLabels:
+              queue: order-processing
+        target:
+          type: AverageValue
+          averageValue: "30"                 # target ~30 in-flight messages per pod
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0           # react to load spikes almost immediately
+      policies:
+        - type: Percent
+          value: 100                         # can double pod count within the window
+          periodSeconds: 15
+        - type: Pods
+          value: 4                           # or add at most 4 pods per 15s window
+          periodSeconds: 15
+      selectPolicy: Max                        # whichever policy yields MORE new pods wins
+    scaleDown:
+      stabilizationWindowSeconds: 300          # 5 min — avoid flapping on a transient dip
+      policies:
+        - type: Percent
+          value: 25                          # remove at most 25% of pods per 60s window
+          periodSeconds: 60
+      selectPolicy: Min                         # whichever policy is MORE conservative wins
+---
+# Note: HPA computes a desired replica count independently for EACH metric above,
+# then takes the MAX across all of them as the final decision. This is why adding
+# more metrics only ever pushes replica count up, never down, relative to a single-metric HPA.
+#
+# Verify:
+#   kubectl get hpa api-server-hpa
+#   kubectl describe hpa api-server-hpa   # check Events for FailedGetResourceMetric / ScalingLimited
+#   kubectl get apiservices | grep metrics.k8s.io   # confirm metrics-server is registered and Available

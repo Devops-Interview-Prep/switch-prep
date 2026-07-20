@@ -1,0 +1,70 @@
+# ConfigMap created imperatively (for reference — declarative YAML below is what you'd actually check in):
+#   kubectl create configmap app-config --from-literal=LOG_LEVEL=info --from-literal=FEATURE_X=enabled
+#   kubectl create configmap app-config-files --from-file=./config/
+#   kubectl create configmap app-config-env --from-env-file=./app.env
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: production
+data:
+  LOG_LEVEL: "info"
+  FEATURE_X: "enabled"
+  MAX_CONNECTIONS: "100"
+  # Whole config files can live as a single key — common for nginx.conf, application.yaml, etc.
+  app.properties: |
+    server.port=8080
+    server.timeout=30s
+    cache.enabled=true
+binaryData: {}   # base64-encoded binary keys go here (e.g. --from-file on a .png/.der) — data is for UTF-8 text only
+
+---
+# Immutable ConfigMap: performance + safety pattern for large clusters.
+# "Updating" this means creating app-config-v2 (or a hash-suffixed name) and
+# repointing the Deployment — never edit an immutable object in place (the API server rejects it).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config-a1b2c3d4   # hash suffix — mirrors what Kustomize configMapGenerator produces
+  namespace: production
+immutable: true               # kubelet/API server stop watching this object for changes
+data:
+  LOG_LEVEL: "info"
+  FEATURE_X: "enabled"
+
+---
+# Pod consuming the ConfigMap three ways: single key as env, envFrom (bulk), and volume mount.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-demo
+  namespace: production
+spec:
+  containers:
+    - name: app
+      image: myapp:1.4.2
+      env:
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: LOG_LEVEL      # single key -> single env var; captured ONCE at pod start
+      envFrom:
+        - configMapRef:
+            name: app-config      # every key in the ConfigMap becomes an env var (bulk import)
+      volumeMounts:
+        - name: config-volume
+          mountPath: /etc/app/config   # each data key appears as a file here; updates propagate (~1min sync)
+        - name: config-volume
+          mountPath: /etc/app/app.properties
+          subPath: app.properties      # WARNING: subPath mounts never receive live updates — see doc
+  volumes:
+    - name: config-volume
+      configMap:
+        name: app-config
+        # optional: items to project only specific keys, or set custom file names/permissions
+        # items:
+        #   - key: app.properties
+        #     path: app.properties
+        #     mode: 0440

@@ -1,0 +1,74 @@
+# ---------------------------------------------------------------------------
+# LimitRange for the "team-checkout" namespace — the mandatory companion to
+# the ResourceQuota in resourcequota.yaml. Because that quota sets
+# requests.cpu/requests.memory/limits.cpu/limits.memory, EVERY pod admitted
+# into this namespace MUST specify those fields on every container, or the
+# API server rejects it. LimitRange auto-injects sane defaults so app teams
+# who forgot (or never bothered) to set requests/limits don't get hard
+# rejected at admission time.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: team-checkout-limits
+  namespace: team-checkout
+spec:
+  limits:
+    # --- container-level defaults + bounds ---
+    - type: Container
+      default:                # injected as `limits` if a container omits them
+        cpu: "500m"
+        memory: 512Mi
+      defaultRequest:          # injected as `requests` if a container omits them
+        cpu: "100m"
+        memory: 128Mi
+      min:                    # reject the pod if any container asks for less
+        cpu: "50m"
+        memory: 64Mi
+      max:                    # reject the pod if any container asks for more
+        cpu: "2"
+        memory: 4Gi
+      maxLimitRequestRatio:    # limit can be at most N x the request (burst ceiling)
+        cpu: "4"               # e.g. request 250m -> limit can be at most 1 core
+        memory: "2"             # memory bursting is riskier -> keep ratio tighter
+
+    # --- pod-level aggregate bounds (sum across all containers in the pod) ---
+    - type: Pod
+      max:
+        cpu: "4"               # no single pod (all containers combined) exceeds 4 cores
+        memory: 8Gi
+      min:
+        cpu: "100m"
+        memory: 128Mi
+
+    # --- PVC bounds — prevents a single claim from silently eating the
+    #     whole requests.storage quota, and blocks accidental 1Gi micro-PVC sprawl ---
+    - type: PersistentVolumeClaim
+      max:
+        storage: 100Gi
+      min:
+        storage: 1Gi
+---
+# ---------------------------------------------------------------------------
+# Contrast example: a stricter LimitRange for a "shared-batch" namespace
+# where every job MUST be Guaranteed QoS (request == limit) to get
+# predictable, non-throttled performance during nightly batch windows.
+# Achieved by setting default == defaultRequest and a maxLimitRequestRatio of 1.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: batch-guaranteed-only
+  namespace: shared-batch
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: "1"
+        memory: 2Gi
+      defaultRequest:
+        cpu: "1"                # identical to default -> Guaranteed QoS by default
+        memory: 2Gi
+      maxLimitRequestRatio:
+        cpu: "1"                 # ratio of 1 forces limit == request -> no bursting allowed
+        memory: "1"

@@ -1,0 +1,139 @@
+# =========================================================================
+# RBAC — full realistic example set
+# ServiceAccount -> Role/ClusterRole -> RoleBinding/ClusterRoleBinding
+# =========================================================================
+
+# 1. ServiceAccount — the only "subject" that is a first-class API object.
+#    Users/Groups are NOT objects in k8s; they come from the auth layer.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ci-deployer
+  namespace: production
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::111122223333:role/ci-deployer-role  # IRSA — separate AWS auth plane, not k8s RBAC
+automountServiceAccountToken: false   # explicit opt-out; nothing in this pod's code calls the k8s API
+
+---
+# 2. Namespace-scoped Role — read-only on core workload objects in "production" only
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-reader
+  namespace: production
+rules:
+  - apiGroups: [""]              # "" = core API group (pods, services, configmaps, secrets...)
+    resources: ["pods", "services"]
+    verbs: ["get", "watch", "list"]   # NOTE: list/watch on secrets is far more dangerous than get — see RBAC.md gotchas
+  - apiGroups: [""]
+    resources: ["pods/log", "pods/status"]   # subresources are gated SEPARATELY from "pods"
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get"]
+    resourceNames: ["release-canary"]   # narrows the rule to one named object only (no wildcards allowed here)
+
+---
+# 3. ClusterRole — cluster-wide resource, but the PERMISSIONS are not necessarily cluster-wide
+#    (depends on whether it's bound via RoleBinding or ClusterRoleBinding — see below)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: deployment-scaler
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/scale"]   # subresource — lets you scale WITHOUT full write access to the Deployment spec
+    verbs: ["update", "patch"]
+
+---
+# 4. The classic interview trick: a RoleBinding that references a ClusterRole.
+#    Grants the ClusterRole's permissions, but SCOPED ONLY to this one namespace.
+#    Lets platform teams define one ClusterRole ("deployment-scaler") once and
+#    reuse it per-namespace instead of duplicating Role objects everywhere.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ci-deployer-can-scale
+  namespace: production
+subjects:
+  - kind: ServiceAccount
+    name: ci-deployer
+    namespace: production
+roleRef:
+  kind: ClusterRole        # <-- referencing a ClusterRole from a RoleBinding
+  name: deployment-scaler
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# 5. RoleBinding to a plain namespaced Role — the "normal" case
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ci-deployer-can-read-pods
+  namespace: production
+subjects:
+  - kind: ServiceAccount
+    name: ci-deployer
+    namespace: production
+roleRef:
+  kind: Role
+  name: pod-reader
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# 6. ClusterRoleBinding — grants a ClusterRole across ALL namespaces
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: sre-oncall-view
+subjects:
+  - kind: Group
+    name: "oidc:sre-oncall"     # group claim from the OIDC token — k8s never stores this Group object anywhere
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: view                    # built-in aggregated ClusterRole
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# 7. Extending the built-in "edit" ClusterRole with a custom CRD, via aggregation —
+#    no need to fork or edit the built-in "edit" role at all.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: custom-resource-editor
+  labels:
+    rbac.authorization.k8s.io/aggregate-to-edit: "true"   # matched by edit's own aggregationRule selector
+rules:
+  - apiGroups: ["batch.example.com"]
+    resources: ["backupjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+---
+# 8. Projected, time-bound, audience-bound ServiceAccount token (1.24+ default pattern)
+#    Replaces the legacy long-lived Secret-based token auto-mount.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-client
+  namespace: production
+spec:
+  serviceAccountName: ci-deployer
+  containers:
+    - name: app
+      image: myapp:1.0
+      volumeMounts:
+        - name: token
+          mountPath: /var/run/secrets/tokens
+          readOnly: true
+  volumes:
+    - name: token
+      projected:
+        sources:
+          - serviceAccountToken:
+              path: api-token
+              expirationSeconds: 3600     # short-lived — kubelet auto-rotates before expiry, unlike the old Secret token
+              audience: "vault"           # token is only valid for this named audience, not the whole API server

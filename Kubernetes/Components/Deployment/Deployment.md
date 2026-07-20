@@ -34,7 +34,7 @@
        - `kubectl rollout history deployment my-app`
      - Rollback to Previous Version
        - `kubectl rollout undo deployment my-app`
-   - **Affinity & Anti-affinity**
+   - **Affinity & Anti-affinity** *(deep-dive: [Scheduling.md](../Scheduling/Scheduling.md) — full taint effects, built-in taints, tolerationSeconds, affinity operators, topology spread constraints)*
      - *Node Affinity*
        - Ensures Pods are scheduled on specific nodes based on node labels.
        - *Node Affinity Types*

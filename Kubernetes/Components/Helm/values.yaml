@@ -1,0 +1,73 @@
+# Default values for the "api-server" chart.
+# These are the lowest-precedence values — overridden by parent chart values,
+# then -f custom-values.yaml, then --set (highest precedence).
+
+replicaCount: 2
+
+image:
+  repository: my-registry/api-server
+  tag: ""            # defaults to .Chart.AppVersion when empty (see _helpers.tpl)
+  pullPolicy: IfNotPresent
+
+nameOverride: ""      # override the derived chart name
+fullnameOverride: ""  # override the full release-name-chart-name string entirely
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: false
+  className: nginx
+  hosts:
+    - host: api.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+# Feature flag consumed inside the template with `if .Values.migration.enabled`
+migration:
+  enabled: true
+  image: my-registry/api-server-migrate:v1.2.3
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+# NOTE: this is the anti-pattern called out in Helm.md — never do this for
+# real secrets. Left here only to illustrate the mistake; in a real chart
+# this key would not exist at all, and the value would come from
+# External Secrets Operator / Vault at runtime instead.
+# secrets:
+#   dbPassword: "hunter2"   # DON'T — plaintext in git, and in `helm get values`
+
+# `global` values are visible to this chart AND to every subchart listed in
+# Chart.yaml's `dependencies:` — the mechanism for sharing config (e.g. an
+# environment name or a shared image registry) down into subcharts without
+# each subchart needing its own copy.
+global:
+  environment: production
+  imageRegistry: my-registry

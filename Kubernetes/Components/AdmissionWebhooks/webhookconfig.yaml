@@ -1,0 +1,183 @@
+# =============================================================================
+# Admission Webhooks — full realistic example set
+# MutatingWebhookConfiguration (sidecar injection) + ValidatingWebhookConfiguration
+# (policy enforcement) + the webhook Service/Deployment they point at.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. MUTATING — Istio-style sidecar injector.
+#    Injects an Envoy proxy container into every pod created in namespaces
+#    that opt in via a label. Runs BEFORE schema validation and BEFORE any
+#    validating webhook, so validators see the pod WITH the sidecar already
+#    present.
+# -----------------------------------------------------------------------------
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: sidecar-injector.example.com
+webhooks:
+  - name: sidecar-injector.example.com   # must be a fully-qualified domain-style name
+    admissionReviewVersions: ["v1"]      # AdmissionReview API version the webhook server speaks
+    sideEffects: None                    # no external side effects -> safe under --dry-run=server
+    timeoutSeconds: 5                    # fail fast; don't let a hung webhook stall every pod create
+    reinvocationPolicy: IfNeeded         # re-run if a LATER mutating webhook changes the pod further
+    matchPolicy: Equivalent              # also fire for older/equivalent API versions of Pod
+    failurePolicy: Fail                  # safe ONLY because of the narrow selectors below
+    rules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]           # only need to inject at creation time
+        resources: ["pods"]
+        scope: "Namespaced"
+    namespaceSelector:
+      # CRITICAL: exclude kube-system and this webhook's own namespace.
+      # Without this exclusion, a broken webhook can block the creation of
+      # its own replacement/fix pod -> chicken-and-egg deadlock.
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values:
+            - kube-system
+            - sidecar-injector-system     # this webhook's own namespace
+    objectSelector:
+      matchLabels:
+        istio-injection: enabled          # only pods whose namespace/labels opt in
+    clientConfig:
+      service:
+        name: sidecar-injector-webhook
+        namespace: sidecar-injector-system
+        path: "/mutate"
+        port: 443
+      caBundle: LS0tLS1CRUdJTi... # base64-encoded CA cert — verifies the webhook server's TLS cert (self-signed/internal CA is common)
+
+---
+# -----------------------------------------------------------------------------
+# 2. VALIDATING — policy-as-code enforcement (Gatekeeper/Kyverno-style).
+#    Rejects pods that don't declare resource requests/limits. Runs AFTER
+#    schema validation, so it never has to defend against a malformed object.
+#    failurePolicy: Ignore here (contrast with #1) — chosen deliberately for
+#    a brand-new policy during its burn-in period, or for a lower-stakes rule
+#    where availability matters more than 100% enforcement.
+# -----------------------------------------------------------------------------
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: require-resource-limits.example.com
+webhooks:
+  - name: require-resource-limits.example.com
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    timeoutSeconds: 3
+    matchPolicy: Equivalent
+    failurePolicy: Ignore              # fail OPEN during rollout — flip to Fail once proven stable
+    rules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+        scope: "Namespaced"
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values:
+            - kube-system
+            - policy-engine-system      # exclude the policy engine's own namespace too
+    clientConfig:
+      service:
+        name: policy-engine-webhook
+        namespace: policy-engine-system
+        path: "/validate"
+        port: 443
+      caBundle: LS0tLS1CRUdJTi...
+
+---
+# -----------------------------------------------------------------------------
+# 3. Supporting Service — what clientConfig.service actually resolves to.
+#    Webhook calls always go over HTTPS to this Service's targetPort.
+# -----------------------------------------------------------------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: sidecar-injector-webhook
+  namespace: sidecar-injector-system
+spec:
+  selector:
+    app: sidecar-injector
+  ports:
+    - port: 443
+      targetPort: 8443    # webhook server listens on 8443 internally, terminates TLS itself
+
+---
+# -----------------------------------------------------------------------------
+# 4. Supporting Deployment — the actual webhook server. Run it HA: a single
+#    replica means any pod restart/OOM is a full webhook outage, which is
+#    exactly what failurePolicy: Fail turns into a cluster-wide incident.
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sidecar-injector-webhook
+  namespace: sidecar-injector-system
+spec:
+  replicas: 3                # HA — a webhook this critical cannot be a single point of failure
+  selector:
+    matchLabels:
+      app: sidecar-injector
+  template:
+    metadata:
+      labels:
+        app: sidecar-injector
+    spec:
+      containers:
+        - name: webhook
+          image: example.com/sidecar-injector:1.4.0
+          ports:
+            - containerPort: 8443
+          volumeMounts:
+            - name: tls-certs
+              mountPath: /etc/webhook/certs
+              readOnly: true
+          readinessProbe:      # Service endpoints must only include pods that can actually serve TLS
+            httpGet:
+              path: /healthz
+              port: 8443
+              scheme: HTTPS
+            initialDelaySeconds: 2
+      volumes:
+        - name: tls-certs
+          secret:
+            secretName: sidecar-injector-tls   # typically issued by cert-manager against an internal CA
+
+---
+# -----------------------------------------------------------------------------
+# 5. matchPolicy: Exact contrast — deliberately NOT using Equivalent.
+#    Only fires for the literal apps/v1 Deployment version listed in `rules`.
+#    A client submitting an older/equivalent API version of Deployment would
+#    NOT be intercepted by this webhook — shown here as the gotcha case, not
+#    a recommended default.
+# -----------------------------------------------------------------------------
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: exact-match-example.example.com
+webhooks:
+  - name: exact-match-example.example.com
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    timeoutSeconds: 3
+    matchPolicy: Exact          # narrow on purpose — only exact apps/v1 requests match
+    failurePolicy: Ignore
+    rules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]     # requests using a different (even wire-equivalent) version skip this webhook
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments"]
+        scope: "Namespaced"
+    clientConfig:
+      service:
+        name: policy-engine-webhook
+        namespace: policy-engine-system
+        path: "/validate-deployments-exact"
+        port: 443
+      caBundle: LS0tLS1CRUdJTi...

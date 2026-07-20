@@ -1,0 +1,126 @@
+# Companion manifest for Scheduling.md
+# Combines taints/tolerations, node affinity, pod anti-affinity, and
+# topology spread constraints on a single realistic Deployment.
+#
+# Assumed cluster context:
+#   - A dedicated node pool labeled workload=critical, tainted so only
+#     tolerating pods land there.
+#   - 3 AZs: us-east-1a, us-east-1b, us-east-1c
+#   - Node instance-type-generation label used for Gt/Lt numeric affinity demo.
+#
+# Pre-req node taint (applied out-of-band, shown here for reference only):
+#   kubectl taint nodes critical-node-1 workload=critical:NoSchedule
+#   kubectl label nodes critical-node-1 instance-type-generation=6
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payments-api
+  namespace: production
+  labels:
+    app: payments-api
+spec:
+  replicas: 6
+  selector:
+    matchLabels:
+      app: payments-api
+  template:
+    metadata:
+      labels:
+        app: payments-api
+        pod-template-hash: "abc123"   # normally injected by the ReplicaSet controller
+    spec:
+      # ---------------------------------------------------------------
+      # 1. Tolerations — required just to be eligible on the tainted pool
+      # ---------------------------------------------------------------
+      tolerations:
+        - key: "workload"
+          operator: "Equal"
+          value: "critical"
+          effect: "NoSchedule"        # matches the node's NoSchedule taint
+
+        - key: "node.kubernetes.io/not-ready"
+          operator: "Exists"
+          effect: "NoExecute"
+          tolerationSeconds: 60       # evict faster than the cluster default (300s)
+                                      # for a latency-sensitive service — don't wait
+                                      # 5 minutes to reschedule off a dead node
+
+        - key: "node.kubernetes.io/unreachable"
+          operator: "Exists"
+          effect: "NoExecute"
+          tolerationSeconds: 60
+
+      # ---------------------------------------------------------------
+      # 2. Node affinity — hard requirement + soft preference
+      # ---------------------------------------------------------------
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: workload
+                    operator: In
+                    values: ["critical"]     # must land on the critical pool
+                  - key: instance-type-generation
+                    operator: Gt
+                    values: ["5"]            # numeric compare: only gen > 5 instances
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 80                     # 1-100, higher wins scoring ties
+              preference:
+                matchExpressions:
+                  - key: topology.kubernetes.io/zone
+                    operator: In
+                    values: ["us-east-1a"]    # prefer 1a if all else equal
+
+        # ---------------------------------------------------------------
+        # 3. Pod anti-affinity — keep replicas off the same node (hard)
+        #    Note: this only prevents co-location, it does NOT guarantee
+        #    even spread across zones — that's what topologySpreadConstraints
+        #    below is for.
+        # ---------------------------------------------------------------
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values: ["payments-api"]
+              topologyKey: kubernetes.io/hostname   # never 2 replicas on 1 node
+
+      # ---------------------------------------------------------------
+      # 4. Topology spread constraints — guarantee even AZ distribution
+      # ---------------------------------------------------------------
+      topologySpreadConstraints:
+        - maxSkew: 1                          # max diff between busiest/least-busy zone
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule     # hard: pod stays Pending rather than skew
+          minDomains: 3                        # expect 3 zones considered even if
+                                                # one is temporarily nodeless (e.g.
+                                                # autoscaler hasn't added a node there yet)
+          labelSelector:
+            matchLabels:
+              app: payments-api
+          matchLabelKeys:
+            - pod-template-hash                # ignore the new/old ReplicaSet hash
+                                                # during rollout so the incoming and
+                                                # outgoing revisions aren't compared
+                                                # against each other as if unrelated
+
+      containers:
+        - name: payments-api
+          image: my-registry/payments-api:v4.1.0
+          ports:
+            - containerPort: 8443
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8443
+            periodSeconds: 5

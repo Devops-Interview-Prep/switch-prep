@@ -1,0 +1,149 @@
+# ---------------------------------------------------------------------------
+# 1. STANDARD NAMESPACE QUOTA — the bread-and-butter multi-tenancy cap.
+#    Covers compute (requests + limits), object counts, and storage
+#    (including a per-StorageClass variant). This is what you'll see in
+#    90% of shared-cluster namespaces.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: team-checkout-quota
+  namespace: team-checkout
+spec:
+  hard:
+    # --- compute: sum across ALL pods in the namespace ---
+    requests.cpu: "20"          # sum of every container's cpu request <= 20 cores
+    requests.memory: 40Gi
+    limits.cpu: "40"            # sum of every container's cpu limit <= 40 cores
+    limits.memory: 80Gi
+
+    # --- object counts: hard cap regardless of size ---
+    count/pods: "100"
+    count/services: "20"
+    count/secrets: "50"
+    count/configmaps: "50"
+    count/persistentvolumeclaims: "10"
+    count/deployments.apps: "30"
+    services.loadbalancers: "2"  # LBs are expensive — cap separately from generic services
+    services.nodeports: "0"      # deny NodePort entirely — force Ingress/ClusterIP
+
+    # --- storage: aggregate + per-StorageClass ---
+    requests.storage: 500Gi                              # total across all PVCs, any class
+    gp3.storageclass.storage.k8s.io/requests.storage: 300Gi   # cap the fast/expensive tier
+    gp3.storageclass.storage.k8s.io/persistentvolumeclaims: "5"
+    standard.storageclass.storage.k8s.io/requests.storage: 200Gi
+---
+# ---------------------------------------------------------------------------
+# 2. BestEffort SCOPE — separately caps pods that specify NO requests/limits
+#    at all (QoS class BestEffort). Note: BestEffort scope only supports
+#    count/pods — you cannot combine it with requests.cpu/memory, because
+#    by definition BestEffort pods have no requests to sum.
+#    Use this to stop a namespace from being flooded with unbounded pods.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: besteffort-pod-cap
+  namespace: team-checkout
+spec:
+  hard:
+    pods: "10"          # at most 10 BestEffort pods allowed at once
+  scopes:
+    - BestEffort
+---
+# ---------------------------------------------------------------------------
+# 3. NotBestEffort SCOPE — the mirror image: caps compute for pods that DO
+#    set at least one request/limit (Burstable + Guaranteed). Combined with
+#    #2 above, this is how you cap "real" workload capacity separately from
+#    stray BestEffort pods.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: notbesteffort-compute-cap
+  namespace: team-checkout
+spec:
+  hard:
+    requests.cpu: "20"
+    requests.memory: 40Gi
+  scopes:
+    - NotBestEffort
+---
+# ---------------------------------------------------------------------------
+# 4. Terminating / NotTerminating SCOPE — split quota by pod lifespan.
+#    "Terminating" = pods with activeDeadlineSeconds set (Jobs, batch pods
+#    with a deadline). Lets you give short-lived batch work its own bucket
+#    so a runaway batch job can't starve long-running services, or vice versa.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: batch-jobs-quota
+  namespace: team-checkout
+spec:
+  hard:
+    requests.cpu: "10"
+    requests.memory: 20Gi
+    count/pods: "50"
+  scopes:
+    - Terminating       # only pods with spec.activeDeadlineSeconds set count against this
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: longrunning-services-quota
+  namespace: team-checkout
+spec:
+  hard:
+    requests.cpu: "20"
+    requests.memory: 40Gi
+  scopes:
+    - NotTerminating    # normal Deployments/StatefulSets (no activeDeadlineSeconds)
+---
+# ---------------------------------------------------------------------------
+# 5. PriorityClass-SCOPED QUOTA via scopeSelector — cap how much
+#    "high-priority" capacity a single tenant namespace can consume,
+#    independent of its normal-priority quota. This is the standard guardrail
+#    against a tenant marking everything "critical" to jump the preemption
+#    queue and starve other tenants at eviction time.
+#    scopeSelector (not the legacy `scopes` field) is required for
+#    PriorityClass matching — it supports operators (In/Exists) on
+#    resourceSelector "priorityClass".
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: high-priority-quota
+  namespace: team-checkout
+spec:
+  hard:
+    pods: "5"                # at most 5 pods may run at this priority
+    requests.cpu: "4"
+    requests.memory: 8Gi
+  scopeSelector:
+    matchExpressions:
+      - operator: In
+        scopeName: PriorityClass
+        values:
+          - business-critical   # only pods using this exact PriorityClass are counted
+---
+# ---------------------------------------------------------------------------
+# 6. Same idea, but explicitly EXCLUDING system-critical priorities —
+#    useful when you want "everything except cluster-critical add-ons"
+#    to fall under a tenant's cap.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: non-system-priority-quota
+  namespace: team-checkout
+spec:
+  hard:
+    pods: "80"
+  scopeSelector:
+    matchExpressions:
+      - operator: NotIn
+        scopeName: PriorityClass
+        values:
+          - system-cluster-critical
+          - system-node-critical
