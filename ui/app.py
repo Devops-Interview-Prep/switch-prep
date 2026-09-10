@@ -397,8 +397,21 @@ def _avg_grade(avg: float) -> str:
     return "F"
 
 
+@app.errorhandler(Exception)
+def handle_exception(e):
+    return jsonify({"error": str(e)}), 500
+
+@app.after_request
+def add_cors(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, PUT, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return response
+
 if __name__ == "__main__":
     print(f"\n  Switch Prep UI")
     print(f"  Notes root : {NOTES_ROOT}")
     print(f"  Open in    : http://localhost:5001\n")
-    app.run(port=5001, debug=False, host="127.0.0.1")
+    # Listen on 0.0.0.0 so both IPv4 (127.0.0.1) and connections via
+    # localhost (which may resolve to ::1 on macOS) can reach the server.
+    app.run(port=5001, debug=False, host="0.0.0.0")

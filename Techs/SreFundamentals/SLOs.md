@@ -101,6 +101,38 @@ SLA → external contract (99.5% availability — refund if breached)
 
 **Always set SLOs tighter than SLAs.** If your SLA is 99.5%, your SLO should be 99.9% — so you catch problems before they become SLA violations.
 
+## Error Budget Calculation
+
+```python
+# Error budget = total acceptable downtime/errors in a window
+# Formula: error_budget_seconds = window_seconds * (1 - SLO_target)
+
+window_days = 28
+slo_target = 0.999    # 99.9%
+
+window_seconds = window_days * 24 * 3600          # 2,419,200 seconds
+error_budget_seconds = window_seconds * (1 - slo_target)
+# 99.9% SLO over 28 days = 2419 seconds ≈ 40 minutes of allowed downtime
+
+print(f"Error budget: {error_budget_seconds:.0f}s = {error_budget_seconds/60:.1f} minutes")
+# Error budget: 2419s = 40.3 minutes
+```
+
+```python
+# Burn rate calculation: how fast are you consuming the budget?
+# If your actual error rate is 1% on a 99.9% SLO:
+#   error_rate = 0.01
+#   budget_fraction_per_window = 1 - slo_target = 0.001
+#   burn_rate = error_rate / budget_fraction_per_window = 0.01 / 0.001 = 10x
+
+def burn_rate(actual_error_rate, slo_target):
+    budget_fraction = 1 - slo_target
+    return actual_error_rate / budget_fraction
+
+# e.g., 0.5% errors on a 99.9% SLO → 5x burn rate
+# Exhausts monthly budget in 28days / 5 = ~5.6 days
+```
+
 ## Common Interview Questions
 
 **Q: What's the right SLO target — 99.9% or 99.99%?**

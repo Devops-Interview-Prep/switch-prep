@@ -1,0 +1,200 @@
+# ─────────────────────────────────────────────
+# GPU Pod — requesting NVIDIA GPUs
+# ─────────────────────────────────────────────
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu-training-job
+  labels:
+    app: ml-trainer
+spec:
+  restartPolicy: Never
+  tolerations:
+    - key: "nvidia.com/gpu"           # tolerate GPU node taint
+      operator: "Exists"
+      effect: "NoSchedule"
+  nodeSelector:
+    accelerator: nvidia               # only land on GPU nodes
+  containers:
+    - name: trainer
+      image: nvcr.io/nvidia/pytorch:23.10-py3
+      command: ["python", "train.py"]
+      resources:
+        requests:
+          memory: "64Gi"
+          cpu: "8"
+          nvidia.com/gpu: "2"         # request 2 GPUs
+        limits:
+          memory: "64Gi"
+          cpu: "8"
+          nvidia.com/gpu: "2"         # MUST equal requests for GPU resources
+
+---
+# ─────────────────────────────────────────────
+# GPU Deployment with nodeAffinity (model type)
+# ─────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: inference
+  template:
+    metadata:
+      labels:
+        app: inference
+    spec:
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  # Require a specific GPU model
+                  - key: nvidia.com/gpu.product
+                    operator: In
+                    values:
+                      - A100-SXM4-80GB
+                      - H100-SXM5-80GB
+                  # Require at least 40GB VRAM
+                  - key: nvidia.com/gpu.memory
+                    operator: Gt
+                    values: ["40000"]
+      containers:
+        - name: server
+          image: nvcr.io/nvidia/tritonserver:23.10-py3
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
+          ports:
+            - containerPort: 8000   # HTTP inference
+            - containerPort: 8001   # gRPC inference
+            - containerPort: 8002   # metrics
+
+---
+# ─────────────────────────────────────────────
+# MIG (Multi-Instance GPU) Pod
+# Requires MIG-enabled node with NVIDIA A100/H100
+# ─────────────────────────────────────────────
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mig-inference-pod
+spec:
+  tolerations:
+    - key: "nvidia.com/gpu"
+      operator: "Exists"
+      effect: "NoSchedule"
+  containers:
+    - name: inference
+      image: nvcr.io/nvidia/tritonserver:23.10-py3
+      resources:
+        limits:
+          nvidia.com/mig-2g.20gb: "1"   # request one 2g.20gb MIG slice (20GB VRAM)
+
+---
+# ─────────────────────────────────────────────
+# NVIDIA Device Plugin DaemonSet
+# Runs on every GPU node, registers nvidia.com/gpu resource
+# ─────────────────────────────────────────────
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nvidia-device-plugin-daemonset
+  namespace: kube-system
+spec:
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      name: nvidia-device-plugin-ds
+  template:
+    metadata:
+      labels:
+        name: nvidia-device-plugin-ds
+    spec:
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      priorityClassName: system-node-critical
+      containers:
+        - name: nvidia-device-plugin-ctr
+          image: nvcr.io/nvidia/k8s-device-plugin:v0.14.5
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: device-plugin
+              mountPath: /var/lib/kubelet/device-plugins
+      volumes:
+        - name: device-plugin
+          hostPath:
+            path: /var/lib/kubelet/device-plugins
+
+---
+# ─────────────────────────────────────────────
+# Device Plugin ConfigMap — enable time-slicing
+# Each physical GPU appears as N virtual GPUs
+# ─────────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nvidia-device-plugin-config
+  namespace: kube-system
+data:
+  config.yaml: |
+    version: v1
+    sharing:
+      timeSlicing:
+        resources:
+          - name: nvidia.com/gpu
+            replicas: 4   # 1 physical GPU → 4 virtual GPUs in Kubernetes
+
+---
+# ─────────────────────────────────────────────
+# Node taint — reserve GPU nodes for GPU workloads
+# ─────────────────────────────────────────────
+# kubectl taint nodes gpu-node-01 nvidia.com/gpu=present:NoSchedule
+# kubectl label nodes gpu-node-01 accelerator=nvidia gpu-type=a100
+
+# ─────────────────────────────────────────────
+# CPU-only Pod targeting compute-optimized nodes
+# ─────────────────────────────────────────────
+apiVersion: v1
+kind: Pod
+metadata:
+  name: batch-processor
+spec:
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 80
+          preference:
+            matchExpressions:
+              - key: node-pool
+                operator: In
+                values: ["compute"]
+        - weight: 20
+          preference:
+            matchExpressions:
+              - key: node.kubernetes.io/instance-type
+                operator: In
+                values: ["c5.9xlarge", "c5.18xlarge"]
+  containers:
+    - name: processor
+      image: batch-app:latest
+      resources:
+        requests:
+          cpu: "4"
+          memory: "8Gi"
+        limits:
+          cpu: "8"
+          memory: "16Gi"

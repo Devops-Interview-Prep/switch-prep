@@ -1,92 +1,202 @@
-- In Go (Golang), a stack is a data structure that follows the Last In, First Out (LIFO) principle. This means the last element added to the stack is the first one to be removed.
+# Stack — Data Structure
 
-- Go doesn't have a built-in stack type, but you can easily implement it using slices.
+> A Stack is a linear data structure following **LIFO** (Last In, First Out) order. The last element pushed is the first to be popped. Go has no built-in stack type — implement with slices (most common) or `container/list`.
 
+---
+
+## Core Operations and Complexity
+
+| Operation | Description | Time | Space |
+|-----------|-------------|------|-------|
+| `Push(x)` | Add element to top | O(1) | O(1) |
+| `Pop()` | Remove and return top element | O(1) | O(1) |
+| `Peek()` | Return top without removing | O(1) | O(1) |
+| `IsEmpty()` | Check if stack has no elements | O(1) | O(1) |
+| `Size()` | Number of elements | O(1) | O(1) |
+
+---
+
+## Implementation — Go Slice (Idiomatic)
+
+```go
+// Simple slice-based stack (most common interview approach)
+stack := []int{}
+
+// Push: append to end
+stack = append(stack, 10)
+stack = append(stack, 20)
+stack = append(stack, 30)
+// stack = [10, 20, 30] — top is rightmost element
+
+// Peek: read last element
+top := stack[len(stack)-1]   // 30
+
+// Pop: slice off last element
+popped := stack[len(stack)-1]
+stack = stack[:len(stack)-1]  // [10, 20]
+
+// IsEmpty:
+if len(stack) == 0 { /* empty */ }
+
+// Iterate (top to bottom):
+for i := len(stack)-1; i >= 0; i-- {
+    fmt.Println(stack[i])
+}
 ```
+
+---
+
+## Struct-based Stack (Reusable)
+
+```go
 package main
 
 import "fmt"
 
 type Stack struct {
-	items []int
+    items []int
 }
 
-// Push adds an element and returns a new updated stack
-func (s Stack) Push(item int) Stack {
-	s.items = append(s.items, item)
-	return s
+func (s *Stack) Push(item int) {
+    s.items = append(s.items, item)
 }
 
-// Pop removes the top element and returns the updated stack and popped value
-func (s Stack) Pop() (Stack, int) {
-	if len(s.items) == 0 {
-		panic("Stack is empty")
-	}
-	lastIndex := len(s.items) - 1
-	popped := s.items[lastIndex]
-	s.items = s.items[:lastIndex]
-	return s, popped
+func (s *Stack) Pop() (int, bool) {
+    if s.IsEmpty() {
+        return 0, false
+    }
+    last := len(s.items) - 1
+    val := s.items[last]
+    s.items = s.items[:last]
+    return val, true
 }
 
-// Peek returns the top element without removing it
-func (s Stack) Peek() int {
-	if len(s.items) == 0 {
-		panic("Stack is empty")
-	}
-	return s.items[len(s.items)-1]
+func (s *Stack) Peek() (int, bool) {
+    if s.IsEmpty() {
+        return 0, false
+    }
+    return s.items[len(s.items)-1], true
 }
 
-// IsEmpty checks if the stack is empty
-func (s Stack) IsEmpty() bool {
-	return len(s.items) == 0
+func (s *Stack) IsEmpty() bool {
+    return len(s.items) == 0
+}
+
+func (s *Stack) Size() int {
+    return len(s.items)
 }
 
 func main() {
-	var stack Stack
+    s := &Stack{}
+    s.Push(10)
+    s.Push(20)
+    s.Push(30)
 
-	stack = stack.Push(10)
-	stack = stack.Push(20)
-	stack = stack.Push(30)
-
-	fmt.Println("Top element:", stack.Peek()) // Output: 30
-
-	var popped int
-	stack, popped = stack.Pop()
-	fmt.Println("Popped:", popped) // Output: 30
-
-	fmt.Println("Is empty?", stack.IsEmpty()) // Output: false
-
-	stack, _ = stack.Pop()
-	stack, _ = stack.Pop()
-
-	fmt.Println("Is empty?", stack.IsEmpty()) // Output: true
+    fmt.Println(s.Peek())  // 30, true
+    val, _ := s.Pop()
+    fmt.Println(val)       // 30
+    fmt.Println(s.Size())  // 2
 }
 ```
 
+---
 
-# []rune
+## Rune Stack (for String Problems)
 
-- A rune is just an alias for int32 in Go.
-- It represents a Unicode code point.
-- Using rune allows you to handle characters beyond basic ASCII (like emojis, accented characters, etc.).  
-`var ch rune = 'A' // rune holds the Unicode value of 'A', which is 65`
+```go
+// When working with Unicode strings in stack problems:
+// Use []rune instead of []byte to handle multi-byte chars correctly
 
-- In Go, strings are immutable, so if you want to treat a string as a modifiable sequence of characters, use a []rune.
+s := "Hello"
+runes := []rune(s)   // convert string to rune slice
 
-- Unicode is a universal standard for representing text from all languages and symbols in a consistent way.
+stack := []rune{}
+for _, r := range runes {
+    stack = append(stack, r)   // push each rune
+}
 
-- It's like a giant dictionary of characters, where every letter, digit, emoji, symbol, etc. from every writing system has a unique number (called a code point).
+// rune is just int32 — represents a Unicode code point
+// []byte works only for ASCII; []rune handles all Unicode
+```
 
-# Why Not []byte for isValid(s string)?
+---
 
-UTF-8 encoded strings (which Go uses) can have multi-byte characters.
+## Classic Interview Problems Using Stack
 
-Bracket characters like (, [, { are ASCII (1-byte), so []byte might seem to work.
+```go
+// Problem: Valid Parentheses (LeetCode #20)
+func isValid(s string) bool {
+    stack := []byte{}
+    match := map[byte]byte{')': '(', '}': '{', ']': '['}
+    for i := 0; i < len(s); i++ {
+        ch := s[i]
+        if ch == '(' || ch == '{' || ch == '[' {
+            stack = append(stack, ch)
+        } else {
+            if len(stack) == 0 || stack[len(stack)-1] != match[ch] {
+                return false
+            }
+            stack = stack[:len(stack)-1]
+        }
+    }
+    return len(stack) == 0
+}
 
-But if any non-ASCII character appears in the string (like 你, 😀), then:
+// Problem: Reverse a string using stack
+func reverseString(s string) string {
+    stack := []rune(s)   // push all chars
+    result := make([]rune, len(stack))
+    for i := range result {
+        result[i] = stack[len(stack)-1-i]  // pop in reverse
+    }
+    return string(result)
+}
 
-[]byte treats them as multiple bytes
+// Problem: Evaluate RPN (Reverse Polish Notation)
+// e.g., ["2","1","+","3","*"] → ((2+1)*3) = 9
+func evalRPN(tokens []string) int {
+    stack := []int{}
+    for _, t := range tokens {
+        switch t {
+        case "+", "-", "*", "/":
+            b, a := stack[len(stack)-1], stack[len(stack)-2]
+            stack = stack[:len(stack)-2]
+            switch t {
+            case "+": stack = append(stack, a+b)
+            case "-": stack = append(stack, a-b)
+            case "*": stack = append(stack, a*b)
+            case "/": stack = append(stack, a/b)
+            }
+        default:
+            n, _ := strconv.Atoi(t)
+            stack = append(stack, n)
+        }
+    }
+    return stack[0]
+}
+```
 
-You may break characters apart unintentionally
+---
 
-This leads to invalid logic, especially in character-based comparisons
+## Stack vs Queue vs Deque
+
+| Property | Stack | Queue | Deque |
+|----------|-------|-------|-------|
+| Order | LIFO | FIFO | Both ends |
+| Add | Push (top) | Enqueue (back) | Both ends |
+| Remove | Pop (top) | Dequeue (front) | Both ends |
+| Use case | DFS, undo, brackets | BFS, scheduling | Sliding window |
+| Go impl | `[]T` (append/pop last) | `[]T` (append back/remove front) | `container/list` |
+
+---
+
+## Interview Q&A
+
+**Q: Why is a stack the right data structure for bracket matching?**
+Brackets have LIFO matching — the most recently opened bracket must be closed first. A stack naturally models this: when you see `(`, push it. When you see `)`, pop and verify it matches `(`. If the stack is empty when a closer arrives, or non-empty at the end, it's invalid. No other structure captures this "innermost first" constraint as cleanly.
+
+**Q: What is the difference between `[]byte` and `[]rune` when building a stack for string problems?**
+`[]byte` treats each byte independently — fine for ASCII (a-z, 0-9) where every character is 1 byte. `[]rune` (int32) represents Unicode code points — safe for multi-byte characters like Chinese, Arabic, emoji. For interview problems that only involve ASCII brackets or digits, `[]byte` is fine and avoids the conversion overhead. If the problem says "string of Unicode characters" or includes non-English text, use `[]rune`.
+
+**Q: How would you implement a stack that returns the minimum element in O(1)?**
+Use a secondary "min stack" alongside the main stack. For every Push, also push to min_stack the minimum of (new_val, min_stack.top). For Pop, pop from both stacks. `GetMin()` just peeks the top of min_stack — always O(1). This is LeetCode #155 Min Stack. Trade-off: doubles memory usage (2 stacks instead of 1), but all operations remain O(1).

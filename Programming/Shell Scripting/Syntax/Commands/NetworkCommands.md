@@ -1,191 +1,266 @@
-# ping
+# Linux Network Commands
 
-- `ping server-ip`
-  - 100% packet loss in case of connection faliure
-  - 0% packate loss for active connection
-  - <100% packate loss may happen if server has high network traffic
+> Essential network troubleshooting commands for DevOps and SRE work — diagnosing connectivity, inspecting open ports, tracing network paths, and testing DNS resolution.
 
-- It can check:
-  - network connectivity
-  - internet connectivity 
-  - network interface card
-  - latancy on network
-  - DNS Resolution
+---
 
-```
-ping google.com
-PING google.com (142.251.223.238): 56 data bytes
-64 bytes from 142.251.223.238: icmp_seq=0 ttl=115 time=22.670 ms
-64 bytes from 142.251.223.238: icmp_seq=1 ttl=115 time=26.844 ms
-64 bytes from 142.251.223.238: icmp_seq=2 ttl=115 time=21.305 ms
-64 bytes from 142.251.223.238: icmp_seq=3 ttl=115 time=21.478 ms
-^C
---- google.com ping statistics ---
-4 packets transmitted, 4 packets received, 0.0% packet loss
-round-trip min/avg/max/stddev = 21.305/23.074/26.844/2.239 ms
+## ping — Test Connectivity and Latency
 
-# round-trip min/avg/max/stddev = 21.305/23.074/26.844/2.239 ms shows the latency 
+```bash
+# Basic usage:
+ping google.com                 # continuous until Ctrl+C
+ping -c 4 google.com            # send exactly 4 packets
+ping -c 4 -i 2 google.com       # 4 packets, 2-second interval
 
+# Example output:
+# PING google.com (142.251.223.238): 56 data bytes
+# 64 bytes from 142.251.223.238: icmp_seq=0 ttl=115 time=22.670 ms
+# 64 bytes from 142.251.223.238: icmp_seq=1 ttl=115 time=26.844 ms
+# 64 bytes from 142.251.223.238: icmp_seq=2 ttl=115 time=21.305 ms
+# 64 bytes from 142.251.223.238: icmp_seq=3 ttl=115 time=21.478 ms
+# --- google.com ping statistics ---
+# 4 packets transmitted, 4 received, 0.0% packet loss
+# round-trip min/avg/max/stddev = 21.305/23.074/26.844/2.239 ms
+#                                                              ↑ latency
 ```
 
-```
-Flag	                            Description
--c <count>	                        Number of packets to send.
-E.g., ping -c 4 google.com  sends 4 packets.
-
--i <interval>	                    Interval (in seconds) between sending packets.
-E.g., ping -i 2 google.com  sends 1 packet every 2 seconds.
-
--t <ttl>	                        Time To Live — sets max hops (how far packet can travel).
-
--s <size>	                        Packet size in bytes.
-E.g., ping -s 1000 google.com sends 1000-byte packets.
-
--W <timeout>	                    Time to wait for a reply (in seconds).
-
--f                                  To send packates as fast as possible to test the network performance
-
--a                                   audible response
-
-Linux specific.
--q	                                Quiet output — only shows summary.
--v	                                Verbose — gives more detailed output.
--4	                                Use IPv4 only.
--6	                                Use IPv6 only.
+### Interpreting Results
 
 ```
-
-# Netstat
-
-```
-sudo netstat -tunp       # On older systems
-sudo ss -tunp            # Faster, newer alternative
+0% packet loss    → healthy connection
+100% packet loss  → no connectivity (or ICMP blocked by firewall)
+<100% packet loss → congestion or instability
+high stddev       → network jitter / unstable connection
 ```
 
-- network utility that displays:
-  - Network Connections for TCP & UDP
-  - Routing Tables
-  - A Number of network Interfaces
-  - Network Protocol Statistics
-
-- It's helpful for troubleshooting, monitoring, and debugging network-related issues.
-- Common Use Cases of netstat
-  - View active network connections
-  - See which ports are open and listening
-  - Identify which process is using a specific port
-  - Check interface statistics (bytes sent/received)
-  - Monitor routing table
-
-- **Flags**
+### ping Flags
 
 ```
-Option	                Description
--a	                    Show all connections and listening ports
--t	                    Show TCP connections only
--u	                    Show UDP connections only
--n	                    Show IP addresses and port numbers numerically (no DNS resolution)
--l	                    Show only listening ports
--p	                    Show the PID and name of the program using the connection
--r	                    Show the routing table
--i	                    Show network interface statistics
--s	                    Show protocol statistics
--c	                    Continuously display output every second (like top)
+-c <count>    : send exactly N packets
+-i <interval> : interval between packets (default: 1s)
+-t <ttl>      : set TTL (Time-To-Live) value
+-s <bytes>    : packet payload size (default: 56 bytes)
+-W <timeout>  : wait time per reply (seconds)
+-f            : flood ping — max speed, tests throughput (use carefully)
+-a            : audible beep on response
+-q            : quiet output — only shows summary
+-v            : verbose output
+-4            : force IPv4
+-6            : force IPv6
 ```
 
-- **Output**
+**What ping can check:** network connectivity, DNS resolution, NIC health, network latency, internet access
 
-- `netstat -tunp`
+---
+
+## netstat / ss — View Network Connections
+
+```bash
+# netstat (older, widely available):
+sudo netstat -tunp       # TCP+UDP connections with PID
+
+# ss (modern replacement — faster, preferred):
+sudo ss -tunp            # same as above
+sudo ss -tlnp            # listening TCP ports only
+sudo ss -an              # all sockets (numeric addresses)
+
+# Output format:
+# Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name
+# tcp        0      0 127.0.0.1:5432          0.0.0.0:*               LISTEN      1342/postgres
+# tcp        0      0 192.168.1.5:22          192.168.1.10:51876      ESTABLISHED 1023/sshd
+# udp        0      0 0.0.0.0:68              0.0.0.0:*                           602/dhclient
 ```
-Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name
-tcp        0      0 127.0.0.1:5432          0.0.0.0:*               LISTEN      1342/postgres
-tcp        0      0 192.168.1.5:22          192.168.1.10:51876      ESTABLISHED 1023/sshd
-udp        0      0 0.0.0.0:68              0.0.0.0:*                           602/dhclient
+
+### Output Field Meaning
+
 ```
-- `Proto`	            ->      Protocol (tcp, udp, etc.)
-- `Recv-Q`	            ->      Receive queue — how much data is queued to be read
-- `Send-Q`	            ->      Send queue — how much data is queued to be sent
-- `Local Address`	    ->      IP and port on the local machine
-- `Foreign Address`     ->      IP and port of the remote machine
-- `State`	            ->      Connection state (e.g., LISTEN, ESTABLISHED, TIME_WAIT, etc.)
-- `PID/Program name`	->      Process ID and name of the program using the connection
+Proto         → Protocol (tcp, udp)
+Recv-Q        → Receive queue — data waiting to be read by application
+Send-Q        → Send queue — data waiting to be sent
+Local Address → IP:port on this machine
+Foreign Addr  → IP:port of the remote machine
+State         → Connection state
+PID/Program   → Process ID and name using this connection
+```
 
-**Common TCP Connection States**
+### netstat / ss Flags
 
-| **State**      | **Meaning**                                                                           |
-| -------------- | ------------------------------------------------------------------------------------- |
-| `LISTEN`       | The server is **waiting** for an incoming connection on a specified port.             |
-| `SYN_SENT`     | The client has sent a SYN (synchronize) packet, **requesting to start a connection**. |
-| `SYN_RECEIVED` | The server received SYN and sent a SYN-ACK back, **waiting for ACK** from client.     |
-| `ESTABLISHED`  | The connection is **open**, and both sides are communicating.                         |
-| `FIN_WAIT_1`   | Connection close initiated by one side (sent FIN).                                    |
-| `FIN_WAIT_2`   | Waiting for the other side to send FIN.                                               |
-| `CLOSE_WAIT`   | One side received FIN and waiting for the application to **close the connection**.    |
-| `CLOSING`      | Both sides have sent FIN — **waiting for final ACK**.                                 |
-| `LAST_ACK`     | Sent FIN, waiting for final ACK (on receiver's side).                                 |
-| `TIME_WAIT`    | Waiting to make sure the other side received the ACK of its FIN.                      |
-| `CLOSED`       | Connection is completely closed, and resources are released.                          |
+```
+-a    : all connections + listening ports
+-t    : TCP only
+-u    : UDP only
+-n    : numeric (no DNS resolution — faster)
+-l    : listening ports only
+-p    : show PID and program name
+-r    : show routing table
+-i    : show network interface statistics
+-s    : protocol statistics
+-c    : refresh continuously every second
+```
 
+### TCP Connection States
 
-# Traceroute
+| State | Meaning |
+|-------|---------|
+| `LISTEN` | Server waiting for incoming connection on this port |
+| `SYN_SENT` | Client sent SYN, waiting for SYN-ACK |
+| `SYN_RECEIVED` | Server received SYN, sent SYN-ACK, waiting for ACK |
+| `ESTABLISHED` | Connection open, data flowing both ways |
+| `FIN_WAIT_1` | Connection close initiated, FIN sent |
+| `FIN_WAIT_2` | Waiting for other side to send FIN |
+| `CLOSE_WAIT` | Received FIN, application hasn't closed yet |
+| `CLOSING` | Both sides sent FIN, waiting for final ACK |
+| `LAST_ACK` | Sent FIN, waiting for final ACK |
+| `TIME_WAIT` | Waiting to ensure final ACK reached other side (2*MSL) |
+| `CLOSED` | Connection fully terminated |
 
-- traceroute shows the path (route) that your packet takes to reach a destination, hop-by-hop, across the internet or network.
-- It helps identify:
-  - Which routers the packet travels through.
-  - Where the delay is occurring.
-  - Where packets might be getting dropped.
+```bash
+# Practical examples:
+ss -tlnp | grep :8080             # what's using port 8080?
+ss -tunp | grep ESTABLISHED       # all active connections
+netstat -tunp | grep -v LISTEN    # exclude listening ports
+lsof -i :443                      # who's using HTTPS port?
+```
 
-**How It Works (in simple terms)**
+---
 
-- It sends UDP or ICMP packets with increasing TTL (Time-To-Live) values.
-- Each router that forwards the packet decrements the TTL.
-- When TTL becomes 0, the router sends back a "Time Exceeded" ICMP message.
-- traceroute records the router’s IP and the time taken.
-- It repeats this with TTL = 1, 2, 3... until it reaches the destination or times out.
+## traceroute — Trace Network Path
 
-**TTL**
-- A number that tells how long a packet should stay "alive" in the network before being discarded.
-- It’s like a self-destruct timer for packets — so they don’t wander the internet forever if something goes wrong.
-- Even though it says "Time To Live", TTL is not measured in time — it’s measured in hops (i.e., how many routers the packet can pass through).
-- *Simple Analogy*
-  - Imagine you're passing a message through a line of 10 people. You say:
-  - “Here’s a note. Pass it on — but only 9 people max.”
-  - Each person:
-    - Reads the note
-    - Decreases the counter by 1
-    - Passes it to the next
-  - If it reaches someone and the counter is 0, they throw the note away — that’s how TTL works!
-- *In Networking*
-  - Each packet has a TTL number (e.g., 64).
-  - Each router it passes through decreases TTL by 1.
-  - If TTL reaches 0, the packet is discarded, and an error is sent back (ICMP: Time Exceeded).
+```bash
+# Trace path to destination:
+traceroute google.com
+traceroute -n google.com       # no DNS resolution (faster)
+traceroute -T google.com       # use TCP (bypasses ICMP/UDP firewalls)
+traceroute -I google.com       # use ICMP (like Windows tracert)
 
-  *Step-by-Step Example:*
-- Step 1: TTL = 1
-  - Packet is sent with TTL = 1.
-  - The first router decreases TTL to 0, drops the packet, and replies:
-    -  ❗ ICMP Time Exceeded message is sent back to your machine.
-  - So traceroute knows who the first router is.  
--  Step 2: TTL = 2
-   -  Packet is sent with TTL = 2.
-   -  First router decrements it to 1, forwards it.
-   -  Second router decrements it to 0, drops it, replies with: ❗ ICMP Time Exceeded
-   -  Now traceroute learns the second router in the path.
--  This continues:
-   -  TTL = 4, TTL = 5, ..., until:
-      -  The packet finally reaches the destination before TTL hits zero.
-   -  At the final destination:
-      -  The server responds with a normal response (like ICMP Echo Reply or TCP SYN/ACK).
-      -  At this point, traceroute knows it has reached the destination, and stops.
+# Example output:
+# traceroute to google.com (142.251.223.238)
+#  1  192.168.1.1    1.2ms   1.1ms   1.3ms    ← home router
+#  2  10.0.0.1       8.5ms   8.4ms   8.6ms    ← ISP gateway
+#  3  * * *                                   ← ICMP blocked
+#  4  72.14.194.25   12.1ms  12.0ms  11.9ms   ← Google edge
+#  5  142.251.223.238 22.3ms  22.1ms  22.5ms  ← destination
+```
 
-**Common Options**
+### How TTL-Based Tracing Works
 
-| Option       | Description                                                 |
-| ------------ | ----------------------------------------------------------- |
-| `-n`         | Don’t resolve IPs to hostnames (faster)                     |
-| `-m <hops>`  | Set max hops (default: 30)                                  |
-| `-q <count>` | Number of probes per hop (default: 3)                       |
-| `-w <sec>`   | Wait time for each response                                 |
-| `-I`         | Use ICMP instead of UDP (like Windows `tracert`)            |
-| `-T`         | Use TCP SYN packets (helpful when firewalls block ICMP/UDP) |
+```
+Step 1: Send packet with TTL=1
+        → First router decrements TTL to 0, drops packet, returns "Time Exceeded"
+        → traceroute records: that router's IP + round-trip time
 
-  
+Step 2: Send packet with TTL=2
+        → First router decrements to 1, passes forward
+        → Second router decrements to 0, drops, returns "Time Exceeded"
+        → traceroute records: second router IP + time
+
+...repeats with TTL = 3, 4, 5... until:
+  → Destination receives packet before TTL hits 0
+  → Returns ICMP Echo Reply (or TCP ACK)
+  → traceroute knows it reached destination, stops
+```
+
+### TTL — Time-To-Live
+
+```
+TTL is NOT measured in time — it's measured in hops (router count).
+
+Analogy: Passing a note down a line of people — 
+  "Pass this on, but subtract 1 from the counter each time.
+   When counter hits 0, throw the note away and send an error back."
+
+Each router:
+  1. Receives the packet
+  2. Decrements TTL by 1
+  3. If TTL == 0: drops packet, sends ICMP "Time Exceeded" back to sender
+  4. If TTL > 0: forwards to next hop
+```
+
+### traceroute Flags
+
+| Option | Description |
+|--------|-------------|
+| `-n` | Don't resolve IPs to hostnames (faster) |
+| `-m <hops>` | Max hops (default: 30) |
+| `-q <count>` | Probes per hop (default: 3, shown as 3 columns) |
+| `-w <sec>` | Wait time for each response |
+| `-I` | Use ICMP (like Windows `tracert`) |
+| `-T` | Use TCP SYN packets (bypasses firewalls blocking ICMP/UDP) |
+
+---
+
+## dig / nslookup — DNS Lookups
+
+```bash
+# dig — detailed DNS query (preferred tool):
+dig google.com              # A record
+dig google.com MX           # mail server records
+dig google.com NS           # name server records
+dig +short google.com       # IP only (cleaner)
+dig @8.8.8.8 google.com     # query specific DNS server (Google's)
+dig -x 8.8.8.8              # reverse lookup (IP → hostname)
+dig +trace google.com       # show full recursive resolution
+
+# nslookup — simpler interactive alternative:
+nslookup google.com
+nslookup google.com 8.8.8.8  # specify DNS server
+```
+
+---
+
+## curl / wget — HTTP Testing
+
+```bash
+# curl — test HTTP endpoints:
+curl https://api.example.com/health          # GET request
+curl -I https://example.com                  # headers only
+curl -X POST -d '{"key":"val"}' \
+     -H "Content-Type: application/json" \
+     https://api.example.com/endpoint
+curl -L https://example.com                  # follow redirects
+curl -v https://example.com                  # verbose (shows TLS + headers)
+curl -w "%{http_code}" -o /dev/null \
+     https://example.com                     # status code only
+
+# wget — download files:
+wget https://example.com/file.zip
+wget -O output.txt https://example.com
+wget -q https://example.com                  # quiet mode
+```
+
+---
+
+## Other Essential Commands
+
+```bash
+# Test if a port is reachable:
+nc -zv hostname 443           # netcat: -z=scan, -v=verbose
+telnet hostname 22            # old-school TCP test
+
+# Routing table:
+ip route show
+route -n                      # older style
+
+# Interface and IP info:
+ip addr show                  # all interfaces
+ip addr show eth0             # specific interface
+ifconfig eth0                 # older alternative
+
+# DNS and hostname:
+hostname && hostname -I       # machine name + all IPs
+cat /etc/resolv.conf          # configured DNS servers
+cat /etc/hosts                # static DNS overrides
+```
+
+---
+
+## Interview Q&A
+
+**Q: What does `* * *` mean in traceroute output, and does it indicate failure?**
+`* * *` on a hop means that router did not send an ICMP Time Exceeded response — either it blocks ICMP (common firewall policy, routers configured to silently drop), or it's very busy and drops probe packets. It does NOT necessarily mean failure: if later hops respond and the final destination is reached, the route is working. The `* * *` hop is just invisible. However, if `* * *` appears at the final hop and the connection fails, it likely indicates the destination is not responding or a firewall is blocking the port.
+
+**Q: Why is `ss` preferred over `netstat` on modern systems?**
+`ss` (socket statistics) reads from kernel netlink sockets directly, while `netstat` reads pseudo-files in `/proc/net/tcp` and `/proc/net/udp`. On systems with thousands of concurrent connections, `netstat` becomes very slow because it reads and parses large files. `ss` gets the same information much faster via a direct kernel interface. Both show the same data — prefer `ss` in production scripts for performance.
+
+**Q: You see a port in `TIME_WAIT` state — what does that mean and is it a problem?**
+`TIME_WAIT` is a normal TCP state after a connection closes. The side that sent the final FIN enters `TIME_WAIT` and stays there for 2×MSL (Maximum Segment Lifetime, typically 60s-120s). This ensures the remote side received the final ACK — if the ACK was lost, the remote will retransmit its FIN and the local side can respond. Large numbers of `TIME_WAIT` sockets indicate high connection turnover (e.g., many short-lived HTTP/1.0 requests). It's usually not a problem, but if you're running out of ephemeral ports, use `SO_REUSEADDR`, keep-alive connections, or connection pooling.

@@ -1,200 +1,202 @@
-# Introduction
+# Linux OS Components
 
-- Linux is an open-source operating system (OS) kernel that acts as an interface between a computer's hardware and the software you run.
+> Linux is an open-source operating system kernel. A "Linux distribution" bundles the kernel with package management, system utilities, and user-space tools into a usable OS. Understanding the component layers is essential for system administration and DevOps.
 
-- Linux distributions are usable os that uses linux kernel and package management system
+---
 
-- its multiuser, multiple users can access system resources simultaneously
+## Introduction
 
-- It is based on Unix, and it’s widely used in servers, desktops, embedded systems, and mobile devices (like Android).
+- Linux is an open-source OS kernel that interfaces between hardware and software
+- Multi-user: multiple users can access system resources simultaneously
+- Based on Unix — widely used in servers, embedded systems, containers, and cloud
+- Linux distributions are usable operating systems built on the Linux kernel
 
-- It’s made up of different components like:
+**Common distributions:**
+- Ubuntu — widely used, extensive documentation, large community support
+- Fedora — cutting edge, upstream of RHEL, great for developers
+- CentOS Stream — community version of RHEL, commonly used in enterprise
+- Debian — stable, conservative release cycle, foundation of Ubuntu
+- Arch Linux — rolling release, highly customizable, "build it yourself"
 
-    1. The kernel (core part)
-    2. System libraries (to interact with the kernel)
-    3. System utilities (like ls, cp, top)
-    4. User interfaces (CLI or GUI)
+---
 
-- Examples of Linux distributions:
-
-    1. Ubuntu
-        - Its widely used , has extensive documentation and a large community for support 
-    2. Fedora
-    3. CentOS (now replaced by CentOS Stream)
-        - Community version of red hat enterprise linux
-        - Commonly used in enterprise environments
-    4. Debian
-    5. Arch Linux
-
-# Vertulization 
-
-- **Hypervisor(virtual Box)**
-  - software that creates and runs VMs
-  - It shares hardware resources from host os
-  - Seprate set of virtual cpu, ram , storage etc.
-  - VMs are fully isolated independent of host OS
-
-    - Types:
-      - *Bare Metal*
-        - Setup Directly on hardware system, no need of host os
-        - Ex. - VMcare vSphere / ESXi, Xen / Citrix Xenserver
-        - Used by cloud providers and Enterprise Servers
-      - *Hosted*
-
-    - UseCase
-      - Cheap
-      - Redusce Workload, Space, Energy
-      - Easy Backup using snapshot
-      - Easy Recovery 
-
-
-#  Linux Kernel
-
-- The Linux kernel is the core of the Linux operating system.
-
-- It directly interacts with the hardware and provides key services to the rest of the OS.
-
-- It handles:
-
-    - Memory management
-
-    - Process scheduling
-
-    - Device drivers
-
-    - System calls
-
-    - File systems
-
-- It’s monolithic in architecture, meaning most OS services run in kernel space for performance.
-
-
-
-# LILO (Linux Loader)
-
-- LILO is a boot loader for Linux. It was one of the earliest boot loaders for Linux systems.
-
-- When you turn on your computer, LILO loads the Linux kernel into memory and starts it.
-
-- It's installed in the Master Boot Record (MBR) or boot sector of the hard disk.
-
-- It allows booting multiple operating systems (multi-boot).
-
-- It’s no longer widely used today—GRUB (GRand Unified Bootloader) has mostly replaced it.
-
-⚠️ LILO is not dynamic:
-
-- If you change your kernel or configuration, you must reinstall LILO using lilo command.
-
-# Linux Components
-
-**1. Kernel**
-
-**2. System Libraries**
-
-   - These are standard functions that applications use to communicate with the kernel without dealing with low-level details.
-
-   - Examples:
-        - glibc – GNU C Library (provides basic C functions like printf, malloc, open)
-
-        - libm – Math functions like sin(), cos(), sqrt()
-
-        - libpthread – POSIX threads for multithreading
-
-        - OpenSSL, libcurl, libxml2 – Used for cryptography, HTTP requests, and XML parsing
-
-**3. System Utilities**
-
-- These are essential programs and tools that provide basic functions for system administration.
+## Virtualization
 
 ```
-File Utilities	       cp, mv, rm, find, ls	                 Manage files
-Process Utilities	   ps, top, kill, nice	                 Manage running processes
-Networking	           ping, ifconfig, netstat, curl, wget	 Monitor and configure networks
-Archiving	            tar, gzip, zip	                     Manage archives
-Disk Utilities	        fdisk, df, mount, umount	         Manage disks and partitions
-Package Managers	    apt, yum, dnf, pacman	             Install/update software
+Hypervisor: software that creates and runs Virtual Machines (VMs)
+  - Shares hardware resources (CPU, RAM, storage) from the host
+  - VMs are fully isolated from each other and the host OS
+  - Each VM gets its own virtual CPU, RAM, disk, and NIC
+
+Types:
+  Type 1 (Bare Metal):    Runs directly on hardware, no host OS needed
+                          e.g., VMware vSphere/ESXi, Xen, KVM (used by AWS)
+  Type 2 (Hosted):        Runs on top of a host OS
+                          e.g., VirtualBox, VMware Workstation
+
+Use cases:
+  - Multiple workloads on one physical server → reduces cost
+  - Easy snapshots and recovery
+  - Isolation between environments (dev/staging/prod)
+  - Cloud computing infrastructure (AWS EC2 uses KVM/Nitro hypervisor)
 ```
 
-**4. Shell (Command Interpreter)**
+---
 
-- The shell is the user interface for access to the OS services. It's a CLI (Command-Line Interface).
+## Linux Kernel
 
-- Popular Shells:
-    - bash – Bourne Again Shell (most common)
-
-    - zsh – Powerful shell with themes and plugins
-
-    - sh – Bourne Shell (older)
-
-    - fish, csh, ksh – Other variants
-
-- Functions:
-    - Reads and interprets user commands
-
-    - Supports scripting (control flow, variables, functions)
-
-    - Provides piping and redirection
-
-
-**5.  User Applications**
-   
-- Applications written by users that run in user space. These could be:
-
-    - Command-line tools: vim, nano, htop
-
-    - GUI Applications: Firefox, LibreOffice, VS Code
-
-    - Services (daemons): sshd, cron, systemd, nginx
-
-- Applications interact with:
-
-    - Shell (user input/output)
-
-    - System libraries (for file access, networking, etc.)
-
-    - Kernel (indirectly through system calls)
-
-
-1. Graphical Subsystem (Optional)
-
-- If you're using a graphical desktop environment (GUI), Linux includes several components:
 ```
-Component	            Description
-X Window System (X11)	Core graphical layer that manages windows and input devices
-Wayland	A modern replacement for X11
-Window Manager	        Controls the appearance of windows (e.g., i3, Mutter, KWin)
-Desktop Environment	    Full UI experience (GNOME, KDE, XFCE, etc.)
+The kernel is the core of Linux — it runs in kernel space (ring 0).
+
+Key responsibilities:
+  - Process scheduling (which process runs on which CPU core, when)
+  - Memory management (virtual memory, page tables, swap)
+  - Device drivers (kernel modules for hardware)
+  - System calls (user programs request kernel services via syscalls)
+  - File system management (ext4, XFS, tmpfs, etc.)
+  - Networking (TCP/IP stack)
+
+Architecture: Monolithic
+  - Most OS services run in kernel space for performance
+  - Contrast with microkernels where services run in user space
+  - Linux modules (e.g., drivers) can be loaded/unloaded dynamically
+
+# Check kernel version:
+uname -r              # e.g., 5.15.0-91-generic
+uname -a              # full info
+
+# List loaded kernel modules:
+lsmod
+modprobe <module>     # load a module
+rmmod <module>        # remove a module
 ```
 
-**7. Init System / Service Manager**
+---
 
-- The init system is the first program that runs when Linux boots. It sets up and manages user-space services.
+## Boot Loaders — LILO and GRUB
 
-- Init System Description:
-    - systemd	Modern and widely used, parallel booting, dependency-based
-    - SysVinit	Traditional sequential booting
-    - OpenRC, runit, s6	Lightweight alternatives
-
-- systemd Services:
 ```
-systemctl start nginx
+Boot sequence: BIOS/UEFI → Boot Loader → Kernel → init system
 
-systemctl status sshd
+LILO (Linux Loader) — legacy:
+  - One of the earliest Linux boot loaders
+  - Installed in the MBR (Master Boot Record) of the hard disk
+  - Not dynamic: if you change kernel, you must run 'lilo' command to reinstall
+  - No longer widely used — replaced by GRUB
 
-journalctl -xe for logs
+GRUB (GRand Unified Bootloader) — current standard:
+  - Dynamic: auto-detects kernels, updates automatically
+  - Supports multiple OS (multiboot)
+  - GRUB2 is the modern version (used by Ubuntu, RHEL, etc.)
+  - Config: /etc/grub.d/ and /etc/default/grub
+
+# GRUB commands:
+update-grub           # regenerate grub.cfg (Ubuntu/Debian)
+grub2-mkconfig        # RHEL/CentOS
 ```
 
+---
 
-1. Package Management System
+## Linux Component Layers
 
-- Used to install, update, remove software.
+```
+User Applications
+      ↓ (system calls)
+System Libraries (glibc, libssl, etc.)
+      ↓ (kernel APIs)
+Linux Kernel
+      ↓ (drivers)
+Hardware (CPU, RAM, Disk, Network)
+```
 
-- Package System Used by	Tools
-    - *DEB Debian, Ubuntu:*	apt, dpkg
+### 1. System Libraries
 
-    - *RPM	Red Hat, Fedora, CentOS:*	yum, dnf, rpm
-Pacman	Arch Linux	pacman
+Libraries that applications use to communicate with the kernel without dealing with low-level details.
 
-    - *Snap/Flatpak	Universal formats*	snap, flatpak
+```
+Library      Purpose
+──────────────────────────────────────────────────────────
+glibc        GNU C Library — printf, malloc, open, read, write
+libm         Math functions — sin(), cos(), sqrt()
+libpthread   POSIX threads — multithreading support
+OpenSSL      Cryptography, TLS/SSL
+libcurl      HTTP client (used by AWS CLI, curl, etc.)
+libxml2      XML parsing
+```
 
+### 2. System Utilities
+
+```
+Category          Commands                            Purpose
+─────────────────────────────────────────────────────────────────────────
+File Utilities    cp, mv, rm, find, ls, chmod, chown  Manage files
+Process           ps, top, kill, nice, htop           Manage processes
+Networking        ping, ifconfig, netstat, curl        Network ops
+Archiving         tar, gzip, zip                      Compression
+Disk              fdisk, df, mount, umount             Disk management
+Package Managers  apt, yum, dnf, pacman               Install software
+```
+
+### 3. Shell
+
+```bash
+# The shell is the user interface — reads and interprets commands
+# Popular shells:
+#   bash  — Bourne Again Shell (most common, default on most distros)
+#   zsh   — Powerful, supports plugins (Oh My Zsh)
+#   sh    — Bourne Shell (POSIX compatible, scripting)
+#   fish  — User-friendly with autocomplete
+
+# Check current shell:
+echo $SHELL
+# Change shell:
+chsh -s /bin/zsh
+```
+
+### 4. Init System / Service Manager
+
+```bash
+# The init system is the first process (PID 1) started after the kernel
+# It boots all other services
+
+# systemd (modern, most common):
+systemctl start nginx        # start a service
+systemctl status sshd        # check service status
+systemctl enable nginx       # start on boot
+journalctl -xe               # view logs
+
+# SysVinit (legacy sequential booting — slower)
+# OpenRC, runit, s6 — lightweight alternatives
+```
+
+### 5. Package Management
+
+```bash
+# DEB-based (Debian, Ubuntu):
+apt update && apt install nginx
+dpkg -l | grep nginx         # list installed
+
+# RPM-based (RHEL, Fedora, CentOS):
+yum install nginx
+dnf upgrade
+
+# Universal formats:
+snap install code            # Snap (cross-distro)
+flatpak install firefox      # Flatpak
+
+# Arch Linux:
+pacman -S nginx
+```
+
+---
+
+## Interview Q&A
+
+**Q: What is the difference between a kernel and a distribution?**
+The Linux kernel is just the core — it manages hardware, processes, memory, and system calls. It cannot be used alone (no shell, no utilities, no package manager). A Linux distribution combines the kernel with: a package manager (apt, yum), system utilities (GNU coreutils: ls, cp, grep), an init system (systemd), a shell (bash, zsh), and often a desktop environment or server applications. Ubuntu, RHEL, and Arch Linux all use the Linux kernel but differ in their packaging choices, release cycles, and target use cases.
+
+**Q: What is the difference between a Type 1 and Type 2 hypervisor, and what does AWS use?**
+A Type 1 (bare metal) hypervisor runs directly on physical hardware without a host OS — it IS the OS. Examples: VMware ESXi, Xen, Microsoft Hyper-V. Type 2 (hosted) hypervisors run on top of a regular OS — e.g., VirtualBox, VMware Workstation. Type 1 has lower overhead and is used in data centers and cloud providers. AWS uses the Nitro hypervisor (a custom Type 1 based on KVM) for EC2 instances — it offloads most virtualization to dedicated hardware, giving near bare-metal performance.
+
+**Q: What is the role of glibc, and what happens if it's missing or incompatible?**
+`glibc` (GNU C Library) is the standard C library on Linux — it provides the system call wrappers (`open`, `read`, `write`, `malloc`), POSIX functions, and most standard C library functions. Almost every compiled program dynamically links to glibc. If you copy a binary compiled on a system with glibc 2.35 to a system with glibc 2.17, it may fail with "GLIBC_2.35 not found" — the newer function symbols don't exist. This is why Docker images are often based on the same distro/version as the build environment, and why Alpine Linux (which uses musl instead of glibc) requires programs to be compiled for musl.

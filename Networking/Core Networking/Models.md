@@ -1,185 +1,236 @@
-# OSI Model
-The OSI (Open Systems Interconnection) model is a conceptual model developed by the International Organization for Standardization (ISO) that describes how communications should occur in a computer network. In other words, the OSI model defines a framework for computer network communications.
+# Network Models — OSI and TCP/IP
 
-The OSI model is composed of seven layers:
+> Two reference models describe how network communication works. The OSI model (7 layers) is the conceptual standard used for teaching and troubleshooting. The TCP/IP model (4 layers) is what actually runs the internet. Understanding both is essential for networking interviews.
 
-**1. Physical Layer**        
-    The physical layer, also referred to as layer 1, deals with the physical connection between devices; this includes the medium, such as a wire, and the definition of the binary digits 0 and 1. Data transmission can be via an electrical, optical, or wireless signal. Consequently, we need data cables or antennas, depending on our physical medium.
+---
 
-**2. Data Link Layer**      
-    The physical layer defines a medium to transmit our signal. The data link layer, i.e., layer 2, represents the protocol that enables data transfer between nodes on the same network segment. Let’s put it in simpler terms. The data link layer describes an agreement between the different systems on the same network segment on how to communicate. A network segment refers to a group of networked devices using a shared medium or channel for information transfer. For example, consider a company office with ten computers connected to a network switch; that’s a network segment.
+## OSI Model — 7 Layers
 
-**3. Network Layer**   
-    The network layer, i.e., layer 3, is concerned with sending data between different networks. In more technical terms, the network layer handles logical addressing and routing, i.e., finding a path to transfer the network packets between the diverse networks.   
-    Examples of the network layer include Internet Protocol (IP), Internet Control Message Protocol (ICMP), and Virtual Private Network (VPN) protocols such as IPSec and SSL/TLS VPN.
+```
+Layer 7: Application   — HTTP, FTP, DNS, SMTP, SSH
+Layer 6: Presentation  — TLS/SSL, encoding, compression, encryption
+Layer 5: Session       — NFS, RPC (session establishment/teardown)
+Layer 4: Transport     — TCP, UDP (ports, segmentation, reliability)
+Layer 3: Network       — IP, ICMP, routing between networks
+Layer 2: Data Link     — Ethernet, MAC addresses, frames (same-segment comm)
+Layer 1: Physical      — cables, fiber, WiFi radio signals (bits → signals)
 
-**4. Transport Layer**   
-    Layer 4, the transport layer, enables end-to-end communication between running applications on different hosts   
-    Examples of layer 4 are Transmission Control Protocol (TCP) and User Datagram Protocol (UDP).
+Mnemonic (top-down): All People Seem To Need Data Processing
+Mnemonic (bottom-up): Please Do Not Throw Sausage Pizza Away
+```
 
-**5. Session Layer**
-    The session layer is responsible for establishing, maintaining, and synchronising communication between applications running on different hosts. Establishing a session means initiating communication between applications and negotiating the necessary parameters for the session. Data synchronisation ensures that data is transmitted in the correct order and provides mechanisms for recovery in case of transmission failures  
-    Examples of the session layer are Network File System (NFS) and Remote Procedure Call (RPC).
+### Layer-by-Layer Breakdown
 
-**6. Presentation Layer**  
-    The presentation layer ensures the data is delivered in a form the application layer can understand. Layer 6 handles data encoding, compression, and encryption. An example of encoding is character encoding, such as ASCII or Unicode.
+```
+Layer 7 — Application:
+  Provides network services directly to end-user applications
+  Your web browser uses HTTP to request pages
+  Protocols: HTTP, HTTPS, FTP, DNS, SMTP, IMAP, SSH, Telnet, SNMP
 
-**7. Application Layer**    
-    The application layer provides network services directly to end-user applications. Your web browser would use the HTTP protocol to request a file, submit a form, or upload a file.   
-    The application layer is the top layer, and you might have encountered many of its protocols as you use different applications. Examples of Layer 7 protocols are HTTP, FTP, DNS, POP3, SMTP, and IMAP. Don’t worry if you are not familiar with all of them.
+Layer 6 — Presentation:
+  Translates data between network format and application format
+  Handles encoding (ASCII, Unicode), compression, encryption
+  TLS/SSL encryption lives here — ensures data is unreadable in transit
 
+Layer 5 — Session:
+  Manages sessions (connections) between applications
+  Establishes, maintains, and terminates dialogs
+  Protocols: NFS (file sharing), RPC (remote procedure calls)
 
-# TCP/IP Model
+Layer 4 — Transport:
+  End-to-end communication between processes (not hosts)
+  Port numbers identify which process receives data
+  TCP: reliable, ordered delivery; UDP: fast, connectionless
+  Multiplexing: multiple conversations over same IP address via ports
 
-**1. Application Layer**   
-     The OSI model application, presentation and session layers, i.e., layers 5, 6, and 7, are grouped into the application layer in the TCP/IP model.  
-**2. Transport Layer**  
-     This is layer 4.  
-**3. Internet Layer**   
-    This is layer 3. The OSI model’s network layer is called the Internet layer in the TCP/IP model.  
-**4. Link Layer**     
-    This is layer 2.
+Layer 3 — Network:
+  Routes packets between different networks (IP addresses)
+  Routers operate at this layer
+  Protocols: IP, ICMP, IPSec, BGP, OSPF
 
+Layer 2 — Data Link:
+  Communication between devices on the SAME network segment
+  MAC addresses identify devices on local network
+  Protocols: Ethernet, WiFi (802.11), ARP
+  Switches operate at this layer (learn MAC-to-port mappings)
 
-# IP Addresses and Subnets
+Layer 1 — Physical:
+  Actual transmission of bits as signals
+  Cables: Cat5e, Cat6, fiber optic; Wireless: radio frequencies
+  Defines voltage levels, timing, pin layouts
+```
 
-Every host on the network needs a unique identifier for other hosts to communicate with him. Without a unique identifier, the host cannot be found without ambiguity. When using the TCP/IP protocol suite, we need to assign an IP address for each device connected to the network.
+---
 
-*For a network 192.168.1.0/24*      
-    192.168.1.0 → Reserved as the network address. It identifies the network itself, not a specific device.   
-    192.168.1.255 → Reserved as the broadcast address. It's used to send data to all devices on the 192.168.1.0/24 network.   
-    That means only the addresses from 192.168.1.1 to 192.168.1.254 can be assigned to devices like computers, printers, or phones. These are the usable host addresses.
+## TCP/IP Model — 4 Layers
 
-*RFC 1918 defines the following three ranges of private IP addresses:*
-    10.0.0.0 - 10.255.255.255 (10/8)   
-    172.16.0.0 - 172.31.255.255 (172.16/12)   
-    192.168.0.0 - 192.168.255.255 (192.168/16)
+```
+TCP/IP collapses OSI into 4 layers (what actually runs the internet):
 
-*Router*     
-    A router forwards data packets to the proper network. Usually, a data packet passes through multiple routers before it reaches its final destination. The router functions at layer 3, inspecting the IP address and forwarding the packet to the best network (router) so the packet gets closer to its destination.
+TCP/IP Layer       OSI Layers it covers        Examples
+─────────────────────────────────────────────────────
+Application        7 + 6 + 5 (App+Pres+Session) HTTP, FTP, DNS, SSH, SMTP
+Transport          4 (Transport)                 TCP, UDP
+Internet           3 (Network)                   IP, ICMP
+Link               2 + 1 (DataLink + Physical)   Ethernet, WiFi
+```
 
-# UDP and TCP
+**Key difference:** OSI is the theoretical model for understanding. TCP/IP is the practical model for implementation. When troubleshooting, both are used — "is this a layer 3 issue (routing)?" vs "is this layer 4 (firewall blocking port)?".
 
-The IP protocol allows us to reach a destination host on the network; the host is identified by its IP address. We need protocols that would enable processes on networked hosts to communicate with each other. There are two transport protocols to achieve that: UDP and TCP.
+---
 
-**UDP**   
-    UDP (User Datagram Protocol) allows us to reach a specific process on this target host. UDP is a simple connectionless protocol that operates at the transport layer, i.e., layer 4. Being connectionless means that it does not need to establish a connection. UDP does not even provide a mechanism to know that the packet has been delivered.
+## IP Addresses and Subnets
 
-    A port number is:
-        16 bits long → that’s 2 bytes or 2 octets
-        That gives 2¹⁶ = 65,536 possible values
-        Valid port range = 1 to 65,535
-    Port 0 is reserved and generally not used in practice
+```
+IPv4 address: 32-bit, written as 4 octets (e.g., 192.168.1.100)
+CIDR notation: IP/prefix (e.g., 192.168.1.0/24)
 
-**TCP**
-- TCP (Transmission Control Protocol) is a connection-oriented transport protocol. It uses various mechanisms to ensure reliable data delivery sent by the different processes on the networked hosts. Like UDP, it is a layer 4 protocol. Being connection-oriented, it requires the establishment of a TCP connection before any data can be sent.
-- In TCP, each data octet has a sequence number; this makes it easy for the receiver to identify lost or duplicated packets. The receiver, on the other hand, acknowledges the reception of data with an acknowledgement number specifying the last received octet.
-- A TCP connection is established using what’s called a three-way handshake. Two flags are used: SYN (Synchronise) and ACK (Acknowledgment).   
+Subnet calculation for 192.168.1.0/24:
+  Network address:    192.168.1.0   (identifies the network — reserved)
+  Broadcast address:  192.168.1.255 (send to ALL hosts — reserved)
+  Usable host range:  192.168.1.1 to 192.168.1.254 (254 hosts)
+  Hosts per subnet:   2^(32-24) - 2 = 254
 
-*The packets are sent as follows:*  
+Common subnet sizes:
+  /32  → single host (1 IP)
+  /30  → 2 usable hosts (point-to-point links)
+  /29  → 6 usable hosts
+  /28  → 14 usable hosts
+  /27  → 30 usable hosts
+  /24  → 254 usable hosts (typical LAN)
+  /16  → 65,534 usable hosts
+  /8   → 16M+ hosts
 
-1. SYN Packet: The client initiates the connection by sending a SYN packet to the server. This packet contains the client’s randomly chosen initial sequence number.
-   
-2. SYN-ACK Packet: The server responds to the SYN packet with a SYN-ACK packet, which adds the initial sequence number randomly chosen by the server.
+RFC 1918 — Private IP ranges (not routable on internet):
+  10.0.0.0/8          (10.0.0.0 - 10.255.255.255)
+  172.16.0.0/12       (172.16.0.0 - 172.31.255.255)
+  192.168.0.0/16      (192.168.0.0 - 192.168.255.255)
 
-3. ACK Packet: The three-way handshake is completed as the client sends an ACK packet to acknowledge the reception of the SYN-ACK packet.
+# Useful commands:
+ip addr show                    # show all interfaces and their IPs
+ip route show                   # routing table
+ip route get 8.8.8.8           # what interface/gateway to reach Google DNS
+```
 
-# Encapsulation
-encapsulation. In this context, encapsulation refers to the process of every layer adding a header (and sometimes a trailer) to the received unit of data and sending the “encapsulated” unit to the layer below.
+---
 
-we have the following four steps: 
+## Packet Encapsulation — How Data Travels
 
-1. Application data:   
-   It all starts when the user inputs the data they want to send into the application. For example, you write an email or an instant message and hit the send button. The application formats this data and starts sending it according to the application protocol used, using the layer below it, the transport layer.
-   
-2. Transport protocol segment or datagram:   
-   The transport layer, such as TCP or UDP, adds the proper header information and creates the TCP segment (or UDP datagram). This segment is sent to the layer below it, the network layer.
+```
+Each OSI layer wraps data with its own header (and sometimes trailer):
 
-3. Network packet:    
-   The network layer, i.e. the Internet layer, adds an IP header to the received TCP segment or UDP datagram. Then, this IP packet is sent to the layer below it, the data link layer.
+Application layer produces: HTTP Request (data)
+  ↓
+Transport layer adds:       TCP Header | HTTP Data     → TCP Segment
+  ↓
+Network layer adds:         IP Header | TCP Segment    → IP Packet
+  ↓
+Data Link layer adds:       Eth Header | IP Packet | Eth Trailer → Ethernet Frame
+  ↓
+Physical layer sends:       bits as electrical/optical signal
 
-4. Data link frame:    
-   The Ethernet or WiFi receives the IP packet and adds the proper header and trailer, creating a frame.
+At the receiver, each layer STRIPS its own header and passes the rest up.
 
-The process has to be reversed on the receiving end until the application data is extracted.
+Example — web request to google.com:
+1. Browser creates HTTP GET request
+2. TCP: adds source port (random), dest port 443, sequence numbers → TCP segment
+3. IP: adds source IP (your IP), dest IP (google's IP) → IP packet
+4. Ethernet: adds source MAC, dest MAC (router's MAC) → Ethernet frame
+5. Sent as electrical signal on wire to router
+6. Router: strips Ethernet frame, reads IP header, re-frames for next hop
+7. Repeat until packet reaches Google's servers (each hop reframes)
+8. Google's server reverses the process to extract HTTP request
+```
 
-# Ethernet
+---
 
-Ethernet is a set of networking technologies used for wired local area networks (LANs) — the cables and protocols that connect your computer to a router, switch, or modem in your home, office, or data center.
+## Ethernet and MAC Addresses
 
-It defines:
-- How devices on a local network communicate
-- The format of data (Ethernet frames)
-- How data is physically transmitted (e.g., over cables)
+```
+Ethernet: the dominant Layer 2 protocol for wired networks
+- Defines frame format and how devices share a medium
+- Cables: Cat5e (1Gbps), Cat6 (10Gbps), fiber (100Gbps+)
+- Used in: LANs, data centers, cloud server racks
 
-Two Key Things Ethernet Provides:
-1. Data Link Layer Protocol:   
-    It defines how to wrap data in a frame with MAC addresses so devices know where to send it.   
-    Ensures reliable delivery on the local network (e.g., your PC to router).
+MAC Address (Media Access Control):
+- 48-bit hardware address burned into network interface card (NIC)
+- Format: 00:1A:2B:3C:4D:5E (hexadecimal, colon-separated)
+- First 3 bytes = OUI (manufacturer identifier)
+- Last 3 bytes = device-unique identifier
+- Used for Layer 2 delivery on local network
+- Not routable — only meaningful on the local segment
 
-2. Physical Connection Standard:   
-    Uses cables like Cat5e, Cat6, or fiber optics.  
-    Plugged into network ports on your computer/router/switch.1
+ARP (Address Resolution Protocol):
+- Maps IP address → MAC address on local network
+- Broadcast "Who has IP 192.168.1.1?" → device responds with its MAC
+# View ARP cache:
+arp -n             # Linux
+ip neigh show      # Modern Linux
+```
 
-**MAC Address**  
-A MAC address (Media Access Control address) is a unique identifier assigned to a network interface (like the Ethernet or Wi-Fi card) on a device.
+---
 
-It operates at the Data Link Layer (Layer 2) of the OSI model and is used for local network communication (like between your laptop and your router).
+## TCP vs UDP
 
+```
+TCP (Transmission Control Protocol):
+  Connection-oriented: 3-way handshake (SYN → SYN-ACK → ACK)
+  Reliable: retransmits lost packets
+  Ordered: reassembles out-of-order segments
+  Flow control: prevents sender from overwhelming receiver
+  Use cases: HTTP/HTTPS, SSH, database queries, file transfer
+  Header size: 20+ bytes
 
-# Life of a Packet
+UDP (User Datagram Protocol):
+  Connectionless: no handshake
+  Unreliable: no retransmit, no ordering, no duplicate detection
+  Fast: lowest possible overhead (8-byte header)
+  Application must handle errors if needed
+  Use cases: DNS, video streaming, VoIP, gaming, NTP, DHCP
 
-1. On the TryHackMe search page, you enter your search query and hit enter.    
-   
-   *packet cantaining: http request*  
+Port ranges:
+  0-1023:     well-known ports (require root to bind)
+  1024-49151: registered ports (application-specific)
+  49152-65535: ephemeral/dynamic (OS assigns for outbound connections)
 
-2. Your web browser, using HTTPS, prepares an HTTP request and pushes it to the layer below it, the transport layer.
-The TCP layer needs to establish a connection via a three-way handshake between your browser and the TryHackMe web server or loadbalancer. After establishing the TCP connection, it can send the HTTP request containing the search query. Each TCP segment created is sent to the layer below it, the Internet layer.  
+Ports are 16-bit: 2^16 = 65,536 total (0-65535; port 0 reserved)
+```
 
-   *TCP segment: http request with tcp connection*
+---
 
-1. The IP layer adds the source IP address, i.e., your computer, and the destination IP address, i.e., the IP address of the TryHackMe web server. For this packet to reach the router, your laptop delivers it to the layer below it, the link layer.
-   
-   *packet cantaining: TCP segment + sourceIP + DestinationIP*
+## SSH and Telnet
 
-2. Depending on the protocol, The link layer adds the proper link layer header and trailer, and the packet is sent to the router. 
-      
-   *Ethernet frame: layer3 + MAC address(source + router)*
+```
+Telnet (port 23):
+- Plain text — no encryption
+- Commands, passwords visible in packet captures
+- Replaced by SSH for all secure remote access
+- Still useful for testing TCP connectivity: telnet host port
 
-3. The router removes the link layer header and trailer, inspects the IP destination, among other fields, and routes the packet to the proper link. Each router repeats this process until it reaches the router of the target server.
-if your services are on cloud the request will be sent to loadbalancer 
+SSH (Secure Shell, port 22):
+- Encrypted: everything is protected (commands, output, passwords)
+- Authentication: password, public key, or certificate
+- Key exchange negotiates session keys using asymmetric crypto
+- Then symmetric encryption (AES) for speed
+- Uses: remote shell, file transfer (SFTP/SCP), port forwarding, tunneling
 
-# Telnet
+# SSH commands:
+ssh user@host                          # connect
+ssh -i ~/.ssh/key.pem user@host        # specify private key
+ssh -L 8080:localhost:80 user@host     # local port forwarding
+ssh -R 9090:localhost:3000 user@host   # remote port forwarding
+scp file.txt user@host:/path/          # secure copy
+```
 
-The TELNET (Teletype Network) protocol is a network protocol for remote terminal connection. In simpler words, telnet, a TELNET client, allows you to connect to and communicate with a remote system and issue text commands. Although initially it was used for remote administration, we can use telnet to connect to any server listening on a TCP port number.
+---
 
-**Default PORT: 23**
+## Interview Q&A
 
-Telnet uses client-server architecture — the server listens, the client connects and sends.
+**Q: What is the difference between OSI model and TCP/IP model?**
+OSI (7 layers) is a theoretical framework created by ISO as a reference model — it separates Session, Presentation, and Application into distinct layers for conceptual clarity. TCP/IP (4 layers) is the practical model that actually runs the internet — it combines OSI's top 3 layers into "Application" and bottom 2 layers into "Link". OSI is used for teaching and troubleshooting ("is this a Layer 3 or Layer 4 problem?"). TCP/IP reflects real protocols. When an interviewer asks "what layer does X operate at?", they usually mean the OSI model.
 
-Telnet is insecure because:
-- No encryption
-- Passwords and commands are sent in plain text
-- Vulnerable to packet sniffing and man-in-the-middle attacks
+**Q: What is the difference between MAC addresses and IP addresses?**
+MAC addresses (Layer 2) are hardware identifiers — 48-bit, assigned to the NIC by the manufacturer, used only for delivery on the local network segment. They don't cross routers. IP addresses (Layer 3) are logical identifiers assigned by network configuration — 32-bit (IPv4), used for routing between networks. Routers use IP to decide where to forward packets but rewrite the MAC addresses at each hop. ARP maps IP → MAC on the local segment. A packet from London to Tokyo keeps the same source/destination IPs the whole way, but its MAC addresses change at every router.
 
-🔐 It's been replaced by SSH (Secure Shell) for most remote access tasks.
-
-
-
-# SSH
-
-SSH is a network protocol that lets you securely connect to a remote machine to execute commands, transfer files, or tunnel traffic — all over an encrypted connection.
-
-**Default PORT: 22** 
-
-- The server sends a host key so the client can verify it's talking to the right machine.
-- The client checks this key against the list of known hosts (~/.ssh/known_hosts).
-- Client and server do a key exchange
-- They agree on: A session key,An encryption algorithm (e.g., AES)
-- All further communication is encrypted using this session key.
-- The client now proves who it is.
-- Methods include:
-  - Password
-  - Public key authentication (id_rsa / id_ed25519)
-  - SSH agents, 2FA, etc.
-
+**Q: What happens if you ping a host and get "Request timeout" vs "Host unreachable"?**
+"Host unreachable" (ICMP Type 3) means a router or the destination reports that it cannot deliver the packet — the route exists but the host is down, the port is closed, or a firewall actively rejected it. "Request timeout" means no response received within the timeout — either ICMP is blocked by a firewall (common on cloud instances), the host is down and no router sends an unreachable message, the packet is lost, or TTL expired (traceroute behavior). Request timeout is more ambiguous — the host could be up but firewalled.

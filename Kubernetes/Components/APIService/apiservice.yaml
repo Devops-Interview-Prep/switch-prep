@@ -1,0 +1,98 @@
+# ─────────────────────────────────────────────
+# APIService — registers an extension API server
+# with the Kubernetes aggregation layer
+# ─────────────────────────────────────────────
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1beta1.metrics.k8s.io   # must be <version>.<group>
+spec:
+  # The Service in front of your extension API server
+  service:
+    name: metrics-server
+    namespace: kube-system
+    port: 443                    # always 443 — aggregation layer requires HTTPS
+
+  group: metrics.k8s.io          # the API group this server serves
+  version: v1beta1               # the version being registered
+
+  # CA cert that signed the extension server's TLS cert
+  # base64-encoded: $(cat ca.crt | base64 -w0)
+  caBundle: LS0tLS1CRUdJTi...
+
+  # Set true only for dev/test (skips TLS verification)
+  insecureSkipTLSVerify: false
+
+  # Priority controls which version is preferred when multiple
+  # APIServices exist for the same group
+  groupPriorityMinimum: 100
+  versionPriority: 100
+
+---
+# ─────────────────────────────────────────────
+# RBAC — allow access to the extension API group
+# ─────────────────────────────────────────────
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: metrics-reader
+rules:
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: metrics-reader-binding
+subjects:
+  - kind: ServiceAccount
+    name: hpa-controller
+    namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: metrics-reader
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ─────────────────────────────────────────────
+# Custom Metrics APIService (for HPA on Prometheus metrics)
+# Requires Prometheus Adapter to be deployed
+# ─────────────────────────────────────────────
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1beta1.custom.metrics.k8s.io
+spec:
+  service:
+    name: prometheus-adapter
+    namespace: monitoring
+    port: 443
+  group: custom.metrics.k8s.io
+  version: v1beta1
+  insecureSkipTLSVerify: false
+  caBundle: LS0tLS1CRUdJTi...
+  groupPriorityMinimum: 100
+  versionPriority: 100
+
+---
+# ─────────────────────────────────────────────
+# External Metrics APIService (for HPA on external systems)
+# e.g. Datadog, CloudWatch metrics via KEDA or Datadog Cluster Agent
+# ─────────────────────────────────────────────
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1beta1.external.metrics.k8s.io
+spec:
+  service:
+    name: datadog-cluster-agent
+    namespace: datadog
+    port: 443
+  group: external.metrics.k8s.io
+  version: v1beta1
+  insecureSkipTLSVerify: false
+  caBundle: LS0tLS1CRUdJTi...
+  groupPriorityMinimum: 100
+  versionPriority: 100

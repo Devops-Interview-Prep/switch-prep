@@ -1,306 +1,392 @@
-# VPC 
+# AWS VPC — Virtual Private Cloud
 
-- A private, isolated network within the AWS cloud
-where you can launch and manage your resources
-securely.
+> A VPC is a private, logically isolated section of the AWS cloud where you launch resources in a virtual network you define. You control the IP address range, subnets, routing, security, and network access — it's your private data center inside AWS.
 
-- We need vpc to To securely isolate and control network environments.
+---
+
+## Core Concepts
+
+```
+VPC: A private network in a single AWS Region
+     - You define the IP address space (CIDR block)
+     - Regional: spans all AZs in the region
+     - Isolated from other VPCs by default
+
+Subnet: A subdivision of a VPC in a single AZ
+     - Resources (EC2, RDS, Lambda) are launched into subnets
+     - Subnets cannot span Availability Zones
+
+Internet Gateway (IGW): Allows public internet access
+NAT Gateway: Allows private subnets to reach internet (outbound only)
+Route Table: Defines where traffic goes based on destination CIDR
+NACL: Subnet-level stateless firewall
+Security Group: Instance-level stateful firewall
+VPC Endpoint: Private access to AWS services without internet
+```
+
+---
+
+## Availability Zones
+
+```
+An AZ is a physically isolated data center within an AWS Region.
+Each AZ has its own: power, cooling, networking, physical security.
+
+AZs in the same region are connected via low-latency (<1ms), 
+high-bandwidth fiber — used for synchronous replication.
+
+When you create a VPC, it is regional.
+Subnets are per-AZ — each subnet lives in exactly one AZ.
+
+Why multi-AZ?
+  If one AZ has a hardware failure, fire, or outage:
+  → Resources in other AZs continue running
+  → Route 53 / ALB / ASG automatically redirect to healthy AZs
+```
+
+---
+
+## CIDR Blocks — IP Address Ranges
+
+```
+CIDR = Classless Inter-Domain Routing
+Format: <base-ip>/<prefix-length>
+
+When creating a VPC, you specify a CIDR block:
+  Example: 10.0.0.0/16
+
+  /16 means: first 16 bits are "network", remaining 16 are "host"
+  Total IPs = 2^(32-16) = 2^16 = 65,536 IP addresses
   
-
-# Availability Zones
-
-- An Availability Zone (AZ) is a physically isolated data center within an AWS Region. Each AZ has its own:
-     - Power
-     - Cooling
-     - Network
-     - Physical security
-- But AZs in the same region are connected with low-latency, high-bandwidth fiber — typically <1ms.
-  
-- When you create a VPC (Virtual Private Cloud), it's regional — but your subnets are created per Availability Zone.
-
-- This enables high availability and fault tolerance. If one AZ goes down (hardware failure, fire, etc.), your app can continue running in others.
-
-# CIDR Blocks
-
-- CIDR (Classless Inter-Domain Routing) is a method for allocating IP addresses and routing Internet Protocol (IP) packets.
-- While Creating Vpc we need to specify a cidr block that defines the IP address range for the entire vpc.
-
-Ex. 10.0.0.0/16
-
-This block will have 2pow(32-16) = 65536 ips but 65531 usable ips
-
-- AWS reserves 5 IP addresses in every subnet (not VPC) for internal networking purposes.
-```
-Ex. 
-
-For a subnet like 10.0.1.0/24, these are reserved:
-
-IP	Reserved For
-10.0.1.0	Network address (subnet identifier)
-10.0.1.1	Reserved by AWS for the VPC router
-10.0.1.2	Reserved for DNS (AmazonProvidedDNS)
-10.0.1.3	Reserved for future use
-10.0.1.255	Broadcast address (not used, but still reserved)
+  Valid VPC CIDR sizes: /16 (65,536 IPs) to /28 (16 IPs)
 ```
 
-# Subnets 
-
-- A subnet is a smaller, segmented part of a larger
-network that isolates and organizes devices within a
-specific IP address range.
-
-- Subnets are used for isolation, routing, load balancing, and network security
-
-**Subnet Types:**   
- 1. Public Subnet:    
-   Has a route to an Internet Gateway (IGW), making instances inside it accessible from the internet (if public IP is assigned).   
-   Usecase: Load balancers, Bastion Hosts
-
- 2. Private Subnet:   
-   Has no direct route to the internet. Instances use NAT Gateway or NAT Instance for outbound access.   
-   Usecase: Application servers, backend APIs
-
-
- 3. Isolated Subnet:    
-   No outbound or inbound internet access. Used for strict internal services like databases or background jobs.   
-   Usecase: Databases, internal processing jobs
-
-
-# Route Tables
-
-- Route Tables are mainly used to Define the protocol for traffic routing between the subnets.
-- A single VPC can have as many as route tables it requires.
-- If the dependencies are attached to the route table then they can't be deleted. 
-
--  Every VPC has a default route table
-   -  When you create a VPC, a main route table is automatically created.
-   -  You can create custom route tables as needed. 
-
--  Subnets must be explicitly associated with a route table
-   -  If not, they inherit the main route table by default.
-  
-- Routes are matched by destination CIDR
-  - Each route has:  
-        1. Destination: A CIDR block (e.g., 0.0.0.0/0, 10.0.2.0/24)   
-        2. Target: Where to send traffic (e.g., IGW, NAT Gateway, ENI, local)
+### AWS Reserved IPs Per Subnet
 
 ```
-Ex. Routes:
-Destination	    Target	        Meaning
-10.0.0.0/16	    local	         All VPC-internal traffic stays inside
-0.0.0.0/0	    igw-abc123	     Internet-bound traffic goes to IGW
-172.31.0.0/22	tgw-xyz456	     Send to Transit Gateway
-10.1.0.0/16	    vgw-def789	   Send to VPN Gateway (on-prem)
+AWS reserves 5 IPs in EVERY subnet (not in the VPC itself).
 
-# for the last entry 
-From VPC to on-prem: 
-Traffic for 10.1.0.0/16 leaves your VPC via the VPN Gateway to your on-prem network.
+Example for subnet 10.0.1.0/24:
 
-From on-prem to VPC: 
-The on-prem network must have a route back to your VPC’s CIDR in its routing (and firewall rules). Then traffic can flow back over the VPN to your VPC.
+IP Address     Reserved For
+──────────────────────────────────────────────────────
+10.0.1.0       Network address (subnet identifier)
+10.0.1.1       VPC router (AWS default gateway)
+10.0.1.2       DNS server (AmazonProvidedDNS)
+10.0.1.3       Reserved for future AWS use
+10.0.1.255     Broadcast address (not usable in AWS)
+
+Usable IPs in /24: 256 - 5 = 251
+Usable IPs in /16: 65,536 - 5 = 65,531
 ```
 
-# Internet Gateway(IGW)
-
-- With the help of IGW (Internet Gateway), the resources present (e.g: EC2) in the VPC will enable to access the Internet.
-
-- One VPC can't have more than one IGW 
-
-- If resources are running in a certain VPC then IGW can not be detached from that particular VPC. 
-
-- It performs network address translation (NAT) for instances that have public IPv4 addresses.
-
-- It allows inbound traffic from the internet to reach your instances (if allowed by security groups and NACLs).
-
-- Only instances with a public IPv4 address or Elastic IP can communicate directly with the internet via the IGW.
-
-
-# VPC Endpoint
-
-- A VPC Endpoint enables private communication between your VPC and supported AWS services (like S3, DynamoDB, SSM) without going through the public internet.
-
-- It allows your EC2 instances and other resources in a VPC to securely connect to AWS services without needing a NAT Gateway, Internet Gateway, or public IP.
-
-- **Types**
-  - *Interface Endpoints (Powered by PrivateLink)*
-    - Creates a private IP-based connection between your VPC and an AWS service 
-    - Deploys a network interface (ENI) in your subnet with private IPs
-    - Use Cases:
-      - EC2 → SSM (Session Manager)
-      - Lambda in VPC → SQS/SNS
-      - Private API Gateway access
-  - *Gateway Endpoints (For S3 and DynamoDB Only)*
-    - Adds a route in your route table to reach S3/DynamoDB via the AWS backbone
-    - EC2 in private subnet downloading files from S3
-    - VPC → DynamoDB from Lambda
-
-- **Real-World Example**
-  - Scenario 1: IAM Role without VPC Endpoint
-    - You give an EC2 instance an IAM role with S3 read/write permissions.
-    - The EC2 is in a private subnet, with only a NAT Gateway.
-    - When the instance tries to access s3.amazonaws.com:
-    - The request goes through the NAT Gateway, out to the public internet, then back into AWS S3 service.
-    - Even though it’s secure (HTTPS), it’s not internal-only.
-
-  - Scenario 2: IAM Role + VPC Endpoint
-    - You give the same IAM role.
-    - But now you also create a Gateway VPC Endpoint for S3.
-    - AWS automatically routes traffic for S3 over the AWS internal backbone — no public internet at all.
-    - It’s faster, cheaper, and more secure.
-
-
-
-# Network Address Translation (NAT)
-
-- Network Address Translation (NAT) is a process where one IP address space (usually private IPs) is mapped to another IP address space (usually public IPs). It allows resources in a private network (with private IPs) to access external networks like the internet without exposing their private IPs.
-
-- An internal host can communicate with an internet server with help of NAT.
-
-- The internet and a private network are separated by a NAT device
-
-- At the same time, incoming traffic from the internet to these instances is blocked unless specifically allowed through other means.
-
-- Each NAT Gateway must be launched in a public subnet in the same AZ as the private subnet it will serve.
-
-**NAT Gateway:**   
-AWS manages the gateway, scales it automatically, and provides high availability within an Availability Zone (AZ). It translates private IP addresses to its own public IP, allowing outbound internet traffic.
-
-**NAT Instance:**   
-You launch a specially configured EC2 instance (usually from a NAT AMI) in a public subnet. This instance performs NAT and routes traffic from private subnet instances to the internet. You manage scaling, patching, and availability.
-
-
-**Why create NAT Gateway per AZ?**
-
-1. *High availability and fault tolerance:*    
-    If an AZ goes down, only the private subnet in that AZ loses NAT connectivity, others are unaffected.
-
-2. *Cross-AZ traffic charges:*    
-    NAT Gateway traffic across AZ boundaries incurs additional data transfer charges, so you want NAT Gateway in the same AZ as the private subnet.
-
-
-
-# NACL Network Access Control Lists
-
-- The NACL security layer for VPC serves as a firewall to manage traffic entering and leaving one or more subnets.
-
-- The NACL for the default VPC is active and connected to the default subnets.
-
-- Applies to all instances in one or more subnets it’s associated with
-
-- Rules are evaluated in order starting from the lowest rule number, and the first matching rule is applied
-
-- Every VPC has a default NACL that allows all inbound and outbound traffic
-
-- Custom NACL By default, deny all inbound/outbound traffic unless explicitly allowed
-
-- Each subnet must be associated with exactly one NACL, but you can associate multiple subnets to the same NACL
-
-
-**Difference Between NACL and Security Group**
-
-1. NACL Supports both allow and deny rules but sg Only allow rules (deny by default)
-
-2. NACL rules Processed in order (lowest number first), but in sg all rules evaluated before allowing traffic
-
-3. Default NACL allows all but Default SG denies all inbound, allows all outbound
-
-**For SG(stateful):**
-- If a connection is initiated from the outside (inbound), and you allow it via an inbound rule, then SG will automatically allow the response back out — even if your outbound rules seem to block it.
-
-- Conversely, if your instance initiates a connection to the outside (like downloading a package), then outbound rules apply strictly.
-
-**For NACL(stateless)**
-- This means they don’t remember the state of a connection. Every inbound and outbound packet is evaluated independently, so you must explicitly allow both directions of traffic — even for responses!
-
-
-
-# AWS VPC (Virtual Private Cloud) Peering
-
-- VPC peering can establish the connection between two Virtual Private Clouds which enables you to route the traffic between two VPCs using the IP address. The virtual servers which are in the same network can communicate with each other with out VPC peering connections but the servers which are in the two different networks can't communicate with each other with out VPC peering.
-
-- You can connect VPCs within the same region or across regions.
-
-- Inter-Region Peering Supported, but latency is higher and data transfer costs apply (cross-region bandwidth charges).
-
-- No transitive peering — if A is peered with B and B is peered with C, A cannot talk to C unless A-C is also peered.
-
-- Can connect VPCs in different AWS accounts.
-
-1. Create a Peering Connection
-    - From VPC A, you create a request to peer with VPC B.
-    - You must specify the account and VPC ID of VPC B.
-
-2. Accept the Peering Request
-    - VPC B's owner accepts the request from their side.
-
-3. Update Route Tables
-    - In VPC A's route table: Route to VPC B’s CIDR via Peering Connection.
-    - In VPC B’s route table: Route to VPC A’s CIDR via Peering Connection.
-
-4. Update security groups to allow inbound/outbound traffic from the peered VPC's IP range.
-
-
-# Transit Gateway
-
-Transit Gateway (TGW) is a regional network transit hub that connects:
-1. Multiple VPCs
-2. VPN Connections
-3. AWS Direct Connect
-4. Other Transit Gateways (via inter-region peering)
-
-- You have many VPCs (say, 10+) that need to communicate with each other and with on-prem infrastructure — without having to manage many-to-many VPC peering.
-
-- To connect VPCs or other networks to TGW, you create attachments:
-    - VPC Attachments
-    - VPN Attachments
-    - Direct Connect Attachments
-    - Peering Attachments (between TGWs)
-
-- Route Tables
-    - TGW has its own route tables, separate from VPC route tables.
-    - You can create multiple route tables to isolate traffic (e.g., dev vs prod).
-    - Each attachment is associated with a TGW route table.
-    - You associate VPCs with a TGW route table to define how they send traffic.
-    - Attachments propagate routes to a TGW route table.
-
-- Multi-account support (via AWS RAM).
-
-- Inter-region peering between TGWs (no NAT needed).
-
--  Pricing
-    - Charged per attachment per hour.
-    - Charged for data processing through the gateway (per GB).
-    - Inter-region peering has additional transfer costs.
-
-
-# Egress-only Internet gateway
-
-- An Egress-Only Internet Gateway (EOIGW) is a VPC component in AWS that allows only outbound IPv6 traffic from instances in a private subnet to the internet — but blocks inbound traffic from the internet.
-
-- With IPv6, NAT (Network Address Translation) is not used like with IPv4. Every IPv6 address is globally routable, which means:
-    - Without a NAT mechanism, instances in private subnets with IPv6 could be accessed directly from the internet unless restricted.
-    - EOIGW solves this by allowing only egress (outbound) IPv6 internet traffic and no ingress (inbound) traffic.
-
-# DHCP(custom Dynamic Host Configuration Protocol) option set
-
-- When you launch an EC2 instance in a VPC, it gets network settings like:
-    - Domain Name System (DNS) server IP
-    - Domain name
-    - (Optionally) NTP servers, NetBIOS settings, etc.
-
-These are controlled by the DHCP options set associated with the VPC.
-
-
-# Managed Prefix Lists
-
-- In AWS, Managed Prefix Lists are collections of CIDR blocks that you can use to simplify and centralize network access control across your VPCs, route tables, and security groups.
-
-- A prefix list is a set of CIDR blocks (IP ranges) that represent common services or networks — like:
-    1. AWS service endpoints (e.g., S3, DynamoDB)
-    2. Shared CIDRs across multiple route tables or security groups
-    3. Your organization’s on-prem IP
-
-
-
-
-
+---
+
+## Subnets — Public, Private, Isolated
+
+```
+A subnet is a segment of a VPC's CIDR, tied to one AZ.
+Resources in the same subnet can communicate directly.
+Traffic between subnets goes through the VPC router.
+```
+
+| Subnet Type | Internet Route | Outbound Internet | Use Case |
+|-------------|---------------|------------------|----------|
+| **Public** | Has IGW route | Yes (via IGW) | ALB, Bastion hosts, NAT Gateway itself |
+| **Private** | No IGW route | Yes (via NAT GW) | App servers, backend APIs, EKS nodes |
+| **Isolated** | None | No | RDS databases, internal processing jobs |
+
+```bash
+# Create a subnet via CLI:
+aws ec2 create-subnet \
+  --vpc-id vpc-0abc123def456 \
+  --cidr-block 10.0.1.0/24 \
+  --availability-zone us-east-1a
+
+# Tag it:
+aws ec2 create-tags \
+  --resources subnet-0abc123 \
+  --tags Key=Name,Value=private-subnet-1a
+```
+
+---
+
+## Route Tables
+
+```
+A route table defines where traffic goes based on destination CIDR.
+Each route has:
+  Destination: CIDR block (e.g., 0.0.0.0/0, 10.0.2.0/24)
+  Target:      Where to send the traffic (IGW, NAT GW, local, TGW)
+
+Every VPC has a main route table (auto-created).
+Subnets not explicitly associated inherit the main route table.
+A subnet can only have ONE route table at a time.
+```
+
+### Example Route Table Entries
+
+```
+Public subnet route table (routes traffic to IGW):
+Destination      Target         Meaning
+─────────────────────────────────────────────────────────
+10.0.0.0/16      local          VPC-internal traffic stays local
+0.0.0.0/0        igw-abc123     All internet traffic → Internet Gateway
+
+Private subnet route table (routes to NAT Gateway):
+Destination      Target         Meaning
+─────────────────────────────────────────────────────────
+10.0.0.0/16      local          VPC-internal stays local
+0.0.0.0/0        nat-def456     Outbound internet → NAT Gateway
+172.31.0.0/22    tgw-xyz789     Corporate network → Transit Gateway
+10.1.0.0/16      vgw-ghi012     On-prem network → VPN Gateway
+```
+
+---
+
+## Internet Gateway (IGW)
+
+```
+IGW enables internet access for resources inside a VPC.
+
+Rules:
+  - One IGW per VPC (1:1 mapping)
+  - IGW cannot be detached while resources in the VPC are running
+  - Performs NAT for instances with public IPv4 addresses
+  - Only instances with a public IP or Elastic IP can use it
+
+Without IGW → no internet access (public or private)
+With IGW + route (0.0.0.0/0 → igw) + public IP → internet access
+```
+
+---
+
+## NAT Gateway — Outbound Internet for Private Subnets
+
+```
+NAT = Network Address Translation
+
+Private subnet instances have no public IP.
+NAT Gateway translates private IPs to its own public IP for outbound requests.
+The internet cannot initiate connections back to private instances (inbound blocked).
+
+NAT Gateway vs NAT Instance:
+  NAT Gateway: AWS-managed, auto-scales, highly available within an AZ
+  NAT Instance: Self-managed EC2 with NAT AMI, you handle scaling and patching
+
+Why create one NAT Gateway per AZ?
+  1. High availability: if one AZ goes down, other AZs still have their own NAT
+  2. Cost: cross-AZ traffic incurs extra data transfer charges
+     → Private subnet in us-east-1a should use NAT GW in us-east-1a (same AZ)
+```
+
+```bash
+# Allocate an Elastic IP for NAT Gateway:
+aws ec2 allocate-address --domain vpc
+
+# Create NAT Gateway in public subnet:
+aws ec2 create-nat-gateway \
+  --subnet-id subnet-PUBLIC-0abc123 \
+  --allocation-id eipalloc-0abc123def
+```
+
+---
+
+## VPC Endpoints — Private Access to AWS Services
+
+```
+By default, traffic from your VPC to AWS services (S3, DynamoDB, SSM) 
+goes through the public internet (via NAT Gateway or IGW).
+
+VPC Endpoints create a private path — no internet required.
+Result: faster, cheaper, more secure.
+```
+
+| Endpoint Type | Works With | How It Works |
+|--------------|------------|--------------|
+| **Gateway Endpoint** | S3, DynamoDB only | Adds a route in the route table to AWS backbone |
+| **Interface Endpoint** | 100+ AWS services | Creates an ENI (private IP) in your subnet |
+
+```
+Real-world example:
+  BEFORE (without VPC Endpoint):
+    EC2 (private subnet) → NAT Gateway → public internet → s3.amazonaws.com
+    Cost: NAT Gateway data processing + transfer charges
+
+  AFTER (with S3 Gateway VPC Endpoint):
+    EC2 (private subnet) → AWS internal backbone → S3
+    Cost: free (S3 gateway endpoints have no hourly charge)
+    Security: traffic never leaves AWS network
+```
+
+---
+
+## Network ACLs (NACLs) vs Security Groups
+
+```
+NACL: Subnet-level, stateless firewall
+SG:   Instance-level, stateful firewall
+```
+
+### NACL Rules
+
+```
+- Applies to ALL instances in associated subnets
+- Rules evaluated in order: lowest rule number first
+- First matching rule wins (explicit allow OR deny)
+- Default NACL: allows all inbound + outbound traffic
+- Custom NACL: denies all by default (must add allow rules)
+- Must explicitly allow BOTH inbound and outbound for each flow
+  (stateless = no connection tracking)
+
+Example: Allow HTTP from internet on a public subnet
+  Inbound rule  100: Allow TCP 80 from 0.0.0.0/0
+  Outbound rule 100: Allow TCP 1024-65535 to 0.0.0.0/0  ← required! (ephemeral ports)
+```
+
+### NACL vs Security Group Comparison
+
+| Aspect | NACL | Security Group |
+|--------|------|----------------|
+| Level | Subnet | Instance (ENI) |
+| State | Stateless — must allow both directions | Stateful — response auto-allowed |
+| Rules | Allow AND Deny | Allow only (deny by default) |
+| Evaluation | In order (lowest number first) | All rules evaluated together |
+| Default | Allows all | Denies all inbound, allows all outbound |
+| Use case | Broad subnet-level protection, explicit deny | Per-instance access control |
+
+---
+
+## VPC Peering
+
+```
+VPC peering creates a direct network connection between two VPCs.
+Resources in peered VPCs can communicate using private IP addresses.
+
+Can peer:
+  - VPCs in same region
+  - VPCs across regions (inter-region peering, higher latency + cost)
+  - VPCs in different AWS accounts
+
+Key constraint:
+  NO transitive peering.
+  If A ↔ B and B ↔ C, then A cannot talk to C — you must create A ↔ C peering.
+  VPC peering is point-to-point only.
+
+CIDR overlap is NOT allowed:
+  VPC A: 10.0.0.0/16 and VPC B: 10.0.1.0/24 → overlap, cannot peer.
+```
+
+```
+Setup Steps:
+1. Create peering connection (VPC A requests VPC B)
+2. VPC B owner accepts the request
+3. Update VPC A's route table: destination = VPC B CIDR, target = peering connection
+4. Update VPC B's route table: destination = VPC A CIDR, target = peering connection
+5. Update security groups to allow traffic from peered VPC's CIDR
+```
+
+---
+
+## Transit Gateway — Hub-and-Spoke for Many VPCs
+
+```
+Problem: 10 VPCs that all need to talk to each other + on-prem.
+VPC Peering solution: 10×9/2 = 45 peering connections. Unmanageable.
+
+Transit Gateway (TGW) is a regional hub that connects:
+  - Multiple VPCs (attach them to TGW)
+  - VPN connections (to on-prem)
+  - AWS Direct Connect (dedicated fiber to AWS)
+  - Other TGWs (inter-region peering)
+
+Each connection is an "attachment":
+  VPC Attachment, VPN Attachment, Direct Connect Attachment, Peering Attachment
+
+TGW has its own route tables (separate from VPC route tables):
+  - Multiple TGW route tables for traffic isolation (dev vs prod)
+  - Each attachment associates with a TGW route table
+
+Multi-account: share TGW across accounts via AWS Resource Access Manager (RAM)
+```
+
+| | VPC Peering | Transit Gateway |
+|--|-------------|----------------|
+| Architecture | Point-to-point | Hub-and-spoke |
+| Transitive routing | No | Yes |
+| Scale | Works for ~5 VPCs | Works for 100s of VPCs |
+| Cost | Free | Per attachment + data processing |
+| Cross-account | Yes | Yes (via RAM) |
+
+---
+
+## Egress-Only Internet Gateway
+
+```
+Applies to IPv6 only.
+
+Problem with IPv6:
+  Every IPv6 address is globally routable — no NAT for IPv6.
+  A private instance with IPv6 could be reached from the internet.
+
+Egress-Only IGW (EOIGW):
+  - Allows OUTBOUND IPv6 traffic from private subnets to internet
+  - BLOCKS inbound IPv6 connections from the internet
+  - IPv6 equivalent of a NAT Gateway (but for IPv6, addresses aren't masked)
+
+Use case:
+  Private subnet instances with IPv6 need internet access for updates,
+  but should not be reachable from the internet.
+```
+
+---
+
+## DHCP Options Set
+
+```
+When an EC2 instance launches in a VPC, it gets network settings via DHCP:
+  - DNS server IP (AmazonProvidedDNS or custom)
+  - Domain name (used for short hostnames)
+  - NTP servers (optional)
+  - NetBIOS settings (optional)
+
+The VPC has one DHCP options set associated with it.
+You can create a custom DHCP options set to:
+  - Use your own internal DNS server (e.g., unbound, Windows DNS)
+  - Set a custom domain name for internal name resolution
+  - Point to custom NTP servers for time sync
+```
+
+---
+
+## Managed Prefix Lists
+
+```
+A Managed Prefix List = a named collection of CIDR blocks.
+Use them in: security groups, route tables, and NACLs.
+
+Benefits:
+  1. Centralize common IP ranges in one place
+  2. Update one prefix list → all security groups using it auto-update
+  3. AWS maintains prefix lists for AWS services (e.g., CloudFront IPs)
+
+Types:
+  Customer-managed: You define the CIDRs (e.g., your office IPs, on-prem ranges)
+  AWS-managed: AWS updates automatically (e.g., com.amazonaws.global.cloudfront.origin-facing)
+
+Example use: Instead of adding 20 CIDR rules to every security group for 
+  your VPN ranges, create one prefix list "vpn-ips" and reference it.
+```
+
+---
+
+## Interview Q&A
+
+**Q: What is the difference between a Security Group and a NACL?**
+Security Groups are stateful, instance-level firewalls — when you allow inbound traffic, the response is automatically allowed (no outbound rule needed). NACLs are stateless, subnet-level firewalls — every packet is evaluated independently, so you must explicitly allow both directions (including ephemeral ports 1024-65535 for responses). Security groups only support allow rules; NACLs support both allow and deny rules. Use security groups for per-instance control and NACLs for subnet-level protection or when you need explicit deny rules (e.g., blocklist a CIDR).
+
+**Q: What is the difference between a NAT Gateway and an Internet Gateway?**
+An Internet Gateway enables two-way communication: public subnet instances can receive inbound connections from the internet (if public IP assigned) and send outbound. A NAT Gateway only enables outbound communication for private subnet instances — it translates private IPs to its own public IP for outbound requests, but blocks all inbound connections. NAT Gateway must be deployed in a public subnet (it uses an IGW for its own internet access). Private subnet instances route 0.0.0.0/0 to the NAT Gateway, not the IGW.
+
+**Q: Why is transitive VPC peering not supported, and how does Transit Gateway solve it?**
+VPC peering creates a direct, point-to-point connection between two VPCs. Transitive routing (A→B→C) would require the peering connection to forward traffic not destined for that VPC — this is intentionally not allowed to keep peering simple and avoid unintended network paths. If you need A to reach C via B, you must create a direct A-C peering. Transit Gateway solves this by acting as a centralized hub with its own routing engine — every VPC attaches to TGW, TGW routes between them, and transitive routing is fully supported through TGW route tables.

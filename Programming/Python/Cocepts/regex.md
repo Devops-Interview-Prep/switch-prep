@@ -1,285 +1,268 @@
-# PYTHON re (Regex) MODULE — COMPLETE BEGINNER → ADVANCED NOTES
+# Python re Module — Regular Expressions
 
-1️⃣ What is Regex? (Concept First)
+> Regex (Regular Expression) is a pattern language for searching, matching, extracting, and validating text. Python's `re` module provides full regex support — used in log analysis, input validation, CLI tools, and monitoring automation.
 
-- Regex = Regular Expression
-- It is a pattern language used to:
-    - Search text
-    - Match formats
-    - Extract data
-    - Validate input
+---
 
-- Examples:
-    - Find "error" in logs
-    - Match IP addresses
-    - Extract timestamps
-    - Validate emails
-
-- Think of regex as:
-    - Ctrl+F on steroids
-
-2️⃣ Why Python has re module
-
-- Python provides the re module to:
-    - Create regex patterns
-    - Search text
-    - Extract matches
-    - Replace text
-
-- Used in:
-    - grep
-    - log analysis
-    - monitoring tools
-    - input validation
-
-3️⃣ Importing re
-
-`import re`
-
-4️⃣ Core Regex Functions (MOST IMPORTANT)
-
-| Function        | Purpose                     |
-| --------------- | --------------------------- |
-| `re.search()`   | Find first match anywhere   |
-| `re.match()`    | Match at beginning only     |
-| `re.findall()`  | Find all matches            |
-| `re.finditer()` | Find all matches (iterator) |
-| `re.sub()`      | Replace matches             |
-| `re.split()`    | Split using regex           |
-| `re.compile()`  | Precompile pattern          |
-
-
-5️⃣ re.search() — Most Used
-
-`re.search(pattern, text)`
-
-
-- Finds first occurrence anywhere in string.
+## What Is Regex?
 
 ```python
+import re
+
+# Regex is a pattern that describes a set of strings
+# Think of it as Ctrl+F on steroids:
+# - Find "error" in logs
+# - Match IP addresses:  \d{1,3}(\.\d{1,3}){3}
+# - Extract timestamps:  \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}
+# - Validate emails:     ^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$
+```
+
+---
+
+## Core Functions
+
+| Function | Purpose | Returns |
+|----------|---------|---------|
+| `re.search()` | Find first match anywhere in string | Match object or None |
+| `re.match()` | Match only at the beginning | Match object or None |
+| `re.findall()` | Find all matches | List of strings |
+| `re.finditer()` | Find all matches (iterator) | Iterator of Match objects |
+| `re.sub()` | Replace matches | New string |
+| `re.split()` | Split string using pattern | List of strings |
+| `re.compile()` | Pre-compile pattern for reuse | Pattern object |
+
+---
+
+## re.search() — Most Used
+
+```python
+import re
 
 text = "error occurred at 10:30"
+
+# Find first occurrence anywhere in string:
 result = re.search("error", text)
+print(result)          # <re.Match object; span=(0, 5), match='error'>
+print(result.group())  # 'error'
+print(result.start())  # 0
 
-print(result)
+# Returns None if no match (always check before calling .group()):
+result = re.search("fatal", text)
+if result:
+    print(result.group())
+else:
+    print("no match")
 
-
-✔️ Match found
-❌ Returns None if no match
-
-Why we used it in pygrep
-if regex.search(line):
-    print(line)
-
+# Practical use — log grep:
+for line in log_lines:
+    if re.search(r"ERROR|FATAL", line, re.IGNORECASE):
+        print(line)
 ```
 
-6️⃣ re.match() — Beginning Only
+---
+
+## re.match() vs re.search()
 
 ```python
-re.match("error", "error occurred")  # match
-re.match("error", "fatal error")     # no match
+# re.match() only matches at the START of the string:
+re.match("error", "error occurred")   # match (starts with "error")
+re.match("error", "fatal error")      # None (doesn't start with "error")
 
+# re.search() finds anywhere:
+re.search("error", "fatal error")     # match (found at position 6)
 ```
 
+**When to use which:** use `re.search()` almost always. Use `re.match()` only when you specifically need to validate the beginning of a string (e.g., checking if a string starts with a particular format).
 
-✔️ Use only when start matters
+---
 
-7️⃣ re.findall() — Get All Matches
+## re.findall() and re.finditer()
 
 ```python
 text = "error error warning error"
+
+# findall — returns all matches as a list:
 matches = re.findall("error", text)
+print(matches)    # ['error', 'error', 'error']
 
-print(matches)
+# findall with groups — returns list of tuples:
+matches = re.findall(r"(\d{1,3})\.(\d{1,3})", "10.0 192.168")
+print(matches)    # [('10', '0'), ('192', '168')]
 
-
-Output:
-
-['error', 'error', 'error']
-```
-
-8️⃣ re.finditer() — Best for Large Data
-
-```python
+# finditer — memory efficient, gives position info:
 for match in re.finditer("error", text):
     print(match.start(), match.group())
+    # 0 error
+    # 6 error
+    # 20 error
+
+# Use finditer for large log files (doesn't load all matches into memory)
 ```
 
-✔️ Memory efficient
-✔️ Gives position info
+---
 
-9️⃣ re.sub() — Replace Text
+## re.sub() and re.split()
 
 ```python
+# re.sub() — replace text:
 re.sub("error", "ERROR", text)
+# Result: "ERROR ERROR warning ERROR"
 
+# Practical use — mask secrets in logs:
+log = "API key: abc123xyz, user: john"
+masked = re.sub(r"key: \w+", "key: [REDACTED]", log)
+# "API key: [REDACTED], user: john"
+
+# re.sub() with function as replacement:
+re.sub(r"\d+", lambda m: str(int(m.group()) * 2), "1 plus 2 is 3")
+# "2 plus 4 is 6"
+
+# re.split() — split using pattern:
+re.split(r"\s+", "one   two  three")   # ['one', 'two', 'three']
+re.split(r"[,;]", "a,b;c,d")          # ['a', 'b', 'c', 'd']
 ```
-- Used for:
-    - Masking secrets
-    - Redaction
-    - Log formatting
 
-🔟 re.split() — Split Using Pattern
+---
+
+## re.compile() — Reuse and Flags
 
 ```python
-re.split(r"\s+", "one   two  three")
+# Compile once, use many times (faster in loops):
+pattern = re.compile(r"ERROR|FATAL", re.IGNORECASE)
 
+for line in log_lines:
+    if pattern.search(line):
+        print(line)
 
-Output:
+# Important flags:
+pattern = re.compile(r"^error", re.MULTILINE | re.IGNORECASE)
+# re.IGNORECASE  → case-insensitive matching
+# re.MULTILINE   → ^ and $ match each line start/end (not just string)
+# re.DOTALL      → . matches any char including newlines
+# re.VERBOSE     → allows comments and whitespace in pattern
 
-['one', 'two', 'three']
-
+# Verbose mode — readable complex patterns:
+email_pattern = re.compile(r"""
+    ^           # start of string
+    [\w.+-]+    # username part
+    @           # at symbol
+    [\w-]+      # domain name
+    \.          # dot (escaped)
+    [a-zA-Z]{2,} # TLD
+    $           # end of string
+""", re.VERBOSE)
 ```
 
-1️⃣1️⃣ re.compile() — PERFORMANCE & CLEAN CODE
+---
+
+## Pattern Syntax Reference
 
 ```python
-pattern = re.compile("error")
-pattern.search(text)
+# Metacharacters:
+.        # any character except newline
+^        # start of string/line
+$        # end of string/line
+\d       # digit [0-9]
+\D       # non-digit
+\w       # word char [a-zA-Z0-9_]
+\W       # non-word char
+\s       # whitespace
+\S       # non-whitespace
+\b       # word boundary
+\B       # non-word boundary
 
+# Quantifiers:
+*        # 0 or more
++        # 1 or more
+?        # 0 or 1 (optional)
+{n}      # exactly n
+{n,}     # at least n
+{n,m}    # between n and m
+*? +? ?? # lazy (non-greedy) versions
+
+# Character classes:
+[abc]    # a or b or c
+[a-z]    # range
+[^0-9]   # NOT digits
+(a|b)    # a or b (alternation)
+
+# Grouping:
+(expr)         # capturing group
+(?:expr)       # non-capturing group
+(?P<name>expr) # named capturing group
+
+# Examples:
+ip_pattern  = r"\d{1,3}(\.\d{1,3}){3}"
+http_status = r"\b[1-5]\d{2}\b"
+timestamp   = r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}"
 ```
 
+---
 
-- Why compile?
-    - Faster for repeated use
-    - Cleaner code
-    - Required for flags
-
-1️⃣2️⃣ Regex Flags (VERY IMPORTANT)
-
-| Flag            | Meaning                 |
-| --------------- | ----------------------- |
-| `re.IGNORECASE` | Case-insensitive        |
-| `re.MULTILINE`  | `^` and `$` match lines |
-| `re.DOTALL`     | `.` matches newline     |
-| `re.VERBOSE`    | Readable regex          |
-
-
-Example:
-
-`re.compile("error", re.IGNORECASE)`
-
-1️⃣3️⃣ Basic Regex Patterns (CORE SYNTAX)
-
-- Literal match
-`error`
-
-- Any character   `.`
-
-- Digits / Words / Spaces 
-
-| Pattern | Meaning    |
-| ------- | ---------- |
-| `\d`    | digit      |
-| `\w`    | word char  |
-| `\s`    | whitespace |
-
-- Quantifiers
-
-| Symbol | Meaning    |
-| ------ | ---------- |
-| `*`    | 0 or more  |
-| `+`    | 1 or more  |
-| `?`    | 0 or 1     |
-| `{n}`  | exactly n  |
-| `{n,}` | at least n |
-
-
-Example:
-`\d+`
-
-1️⃣4️⃣ Anchors
-
-| Anchor | Meaning       |
-| ------ | ------------- |
-| `^`    | start of line |
-| `$`    | end of line   |
-
-
-Example: `^error`
-
-1️⃣5️⃣ Character Classes
+## Named Groups and Capturing
 
 ```python
-[abc]     # a or b or c
-[a-z]     # lowercase letters
-[^0-9]    # NOT digits
+# Named groups — most readable approach:
+match = re.search(
+    r"(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})",
+    "Log at 10:45:32"
+)
+if match:
+    print(match.group("hour"))    # "10"
+    print(match.group("minute"))  # "45"
+    print(match.groupdict())      # {'hour': '10', 'minute': '45', 'second': '32'}
+
+# Using sub with named groups:
+re.sub(r"(?P<month>\d{2})/(?P<day>\d{2})/(?P<year>\d{4})",
+       r"\g<year>-\g<month>-\g<day>",
+       "12/25/2024")
+# "2024-12-25"
 ```
 
-1️⃣6️⃣ Groups & Capturing
+---
+
+## re.search vs re.match vs re.fullmatch — Comparison
+
+| Function | Where it searches | Use case |
+|----------|------------------|----------|
+| `re.match()` | Beginning only | Validate format of a string prefix |
+| `re.search()` | Anywhere | Find pattern in text |
+| `re.fullmatch()` | Entire string | Validate complete string format |
 
 ```python
-match = re.search(r"(\d{2}):(\d{2})", "Time 10:45")
-print(match.group(1))  # 10
-print(match.group(2))  # 45
+# e.g., validating an IP address completely:
+if re.fullmatch(r"\d{1,3}(\.\d{1,3}){3}", user_input):
+    print("valid IP format")
+# re.search() would also match "192.168.1.1xyz" — fullmatch requires complete match
 ```
 
-1️⃣7️⃣ Named Groups (Very Useful)
+---
+
+## When NOT to Use Regex
 
 ```python
-r"(?P<hour>\d{2}):(?P<minute>\d{2})"
+# Use simple string methods for simple tasks:
+# ❌ Slow, overkill:
+if re.search("error", line):
+    ...
+
+# ✓ Faster, cleaner:
+if "error" in line:
+    ...
+
+# When to use regex:
+# ✓ Pattern matching (variable formats)
+# ✓ Extracting parts of strings
+# ✓ Complex validation (email, IP, timestamps)
+# ✓ Log parsing with structure
 ```
 
-1️⃣8️⃣ Escaping Characters
+---
 
-- Special characters must be escaped:
+## Interview Q&A
 
-`\. \* \+ \?`
+**Q: What is the difference between `re.search()` and `re.match()`?**
+`re.search()` scans the entire string for the pattern and returns the first match wherever it appears. `re.match()` only checks for a match at the very beginning of the string — it won't find a match if the pattern appears anywhere else. In practice, `re.search()` is almost always what you want. Use `re.match()` specifically when validating a string format that must start a particular way (e.g., verifying a line starts with a timestamp). Remember: `re.match()` on `"fatal error"` for pattern `"error"` returns None — use `re.search()` instead.
 
-
-- Use raw strings:
-
-`r"\d+"`
-
-1️⃣9️⃣ Common Regex Examples (SRE GOLD)
-
-- IP Address        
-`\d{1,3}(\.\d{1,3}){3}`
-
-- HTTP Status Code          
-`\b[1-5]\d{2}\b`
-
-- Timestamp     
-`\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}`
-
-2️⃣0️⃣ Error Handling in Regex
-
-- Invalid regex:       
-`re.compile("[")`
-
-- Raises:    
-`re.error`
-
-
-- We handled this in pygrep.
-
-2️⃣1️⃣ Regex in pygrep (Full Context)
-```python
-flags = re.IGNORECASE if args.ignore_case else 0
-regex = re.compile(args.pattern, flags)
-
-if regex.search(line):
-    print(line)
-
-```
-
-2️⃣2️⃣ When NOT to Use Regex
-
-❌ Simple substring search      
-❌ Performance-critical exact match     
-❌ Overcomplicated patterns
-
-- Use:
-
-    - if "error" in line:
-
-2️⃣3️⃣ Interview One-Liners (IMPORTANT)
-
-- re.search() finds first match anywhere
-
-- re.match() matches from beginning
-
-- re.findall() returns all matches
-
-- re.compile() improves performance and supports flags
-
+**Q: Why use `re.compile()` and when does it actually help?**
+`re.compile()` pre-compiles a regex pattern into a pattern object, so the pattern isn't reparsed on every call. This is most beneficial in tight loops — e.g., grepping through millions of log lines. Python's `re` module does cache compiled patterns internally (small LRU cache), so the speedup from explicit `compile()` depends on whether you'd hit the cache limit. The other reason to use `compile()` is code clarity: naming the compiled pattern (`error_pattern = re.compile(...)`) makes code more readable and allows adding flags like `re.IGNORECASE` in one place.

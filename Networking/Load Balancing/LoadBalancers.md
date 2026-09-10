@@ -1,152 +1,164 @@
+# AWS Load Balancers
+
+> AWS Elastic Load Balancing (ELB) distributes incoming traffic across multiple targets — EC2 instances, containers, Lambda, or IP addresses. Selecting the right load balancer type is a common architecture decision in AWS interviews.
+
+---
+
+## How Load Balancing Works
+
+```
+Request flow:
+1. Client sends request to load balancer's DNS name
+2. Load balancer checks health of registered targets
+3. Routes traffic to a healthy target using chosen algorithm (round-robin, least connections, etc.)
+4. Target processes request and returns response
+5. Load balancer monitors health and auto-removes unhealthy targets
+```
 
-In AWS, load balancers are services that distribute incoming traffic across multiple targets (like EC2 instances, containers, or IP addresses) to ensure high availability, fault tolerance, and scalability. AWS offers Elastic Load Balancing (ELB) as a managed service for this purpose.
+---
+
+## Types of AWS Load Balancers
+
+| Feature | ALB | NLB | GWLB | CLB |
+|---------|-----|-----|------|-----|
+| OSI Layer | 7 (Application) | 4 (Transport) | 3 (Network) | 4 + 7 |
+| Protocol | HTTP/HTTPS/gRPC | TCP/UDP/TLS | All IP traffic | HTTP/HTTPS/TCP |
+| Routing | Host/path/header | IP/Port | Transparent | Basic |
+| Static IP | No | Yes | Yes | No |
+| Source IP preserve | No (X-Forwarded-For) | Yes | Yes | No |
+| Use case | Web apps, APIs | High perf, non-HTTP | Firewall appliances | Legacy |
+
+---
+
+## Application Load Balancer (ALB) — Layer 7
+
+```
+Best for: HTTP/HTTPS traffic, REST APIs, microservices
 
-# How Load Balancing Works in AWS
+Key features:
+- URL-based routing: /api/* → Service A, /admin/* → Service B
+- Host-based routing: api.example.com vs admin.example.com
+- Header-based routing: route by User-Agent, custom headers
+- Query string routing: ?version=v2 → v2 service
+- Native WebSocket and HTTP/2 support
+- WAF (Web Application Firewall) integration
+- Authentication via Cognito or OIDC (before the request hits the app)
+- Lambda functions as targets
+- Sticky sessions via cookie
+
+ALB with Kubernetes (AWS Load Balancer Controller):
+- Creates ALB per Ingress resource automatically
+- Target type: ip (direct pod) or instance (via NodePort)
+- TLS termination with ACM certificates
+- Group multiple Ingresses into one ALB with annotation:
+  alb.ingress.kubernetes.io/group.name: my-group
+
+Limitations:
+- HTTP/HTTPS only — no gRPC over plain HTTP, no custom TCP/UDP
+- No static IP (ALB IPs change) — use NLB if you need fixed IPs
+- No source IP preservation (use X-Forwarded-For header)
+- 1 ALB per Ingress = expensive at scale
+```
+
+---
 
-- Client sends request to load balancer's DNS name.
+## Network Load Balancer (NLB) — Layer 4
 
-- Load balancer checks health of targets.
+```
+Best for: high-throughput TCP/UDP traffic, non-HTTP protocols, static IPs
 
-- It chooses a healthy target using a routing algorithm (round-robin, least connections, etc.).
+Key features:
+- Millions of requests/second with ultra-low latency
+- Static Elastic IP addresses (per AZ) — great for IP whitelisting
+- Preserves client source IP — backend sees real client IP
+- TLS termination (optional) — or pass-through to backend
+- Zonal DNS failover support
+- Target types: instance, ip, ALB (can place ALB behind NLB)
 
-- Routes traffic to the selected target.
+Protocols supported:
+- TCP, UDP, TLS, gRPC, WebSocket, QUIC, HTTP/HTTPS (pass-through)
 
-- Load balancer monitors target health and scales automatically if needed.
+NLB with Kubernetes:
+- Use when: gRPC, WebSocket, custom TCP, need static IP
+- Ingress controller (nginx) exposed via LoadBalancer service type
+- NLB routes to nginx pods, nginx does L7 routing
 
-# Types of Load Balancers in AWS
+Limitations:
+- No content-based routing (no path/host routing at NLB level)
+- No WAF integration
+- Cannot inspect or modify HTTP headers
+```
 
-**1. Application Load Balancer (ALB):**   
-- Layer: Operates at Layer 7 (Application layer)
-- Use case: Best suited for HTTP/HTTPS traffic
+---
 
-  - Key Features:
-    - URL-based routing (e.g., /api/* → service A, /admin/* → service B)
+## Kubernetes Ingress Architectures
 
-    - Host-based routing (e.g., api.example.com vs admin.example.com)
+### Option 1: DNS + nginx Controller (NodePort)
 
-    - Native support for WebSocket
+```
+Route53 → public node IPs → NodePort → nginx ingress controller → pods
 
-    - Integration with AWS WAF for security
+When to use:
+- On-prem / bare metal clusters
+- Lab/dev environments
+- You manage your own edge (Cloudflare, HAProxy in front)
 
-    - Supports container-based applications (e.g., ECS with dynamic ports)
+Cons:
+- No health checking unless Route53 health checks configured
+- Uneven load (DNS caching causes stickiness to one node)
+- No connection draining, no WAF at edge
+```
 
-**2. Network Load Balancer (NLB):**
+### Option 2: DNS + NLB + nginx Controller (LoadBalancer Service)
 
-- Layer: Operates at Layer 4 (Transport layer)
-- 
-- Use case: Ideal for high-performance TCP/UDP traffic
+```
+Route53 → NLB → nginx pods (LoadBalancer type Service) → application pods
 
- - Key Features:
+When to use:
+- Production on AWS with non-HTTP protocols (gRPC, WebSocket)
+- Need static IP for IP whitelisting
+- Cost-sensitive: fewer ALBs
 
-    - Handles millions of requests per second with low latency
+Pros:
+- gRPC, WebSocket, TCP all work
+- NLB health-checks nginx pods directly
+- Static Elastic IP per AZ
 
-    - Supports static IPs or Elastic IPs
+Cons:
+- No WAF (add Cloudflare or AWS WAF behind NLB separately)
+- Cannot manipulate HTTP headers like nginx can (NLB is transparent L4)
+```
 
-    - Preserves source IP address means the backend pod/service receives the actual IP address of the client that made the request — not the IP of the load balancer or proxy.
+### Option 3: DNS + ALB + AWS Load Balancer Controller
 
-    - Good for non-HTTP protocols or when extremely high performance is required
+```
+Route53 → ALB (provisioned by LBC) → pods (ip target mode)
 
-**3. Gateway Load Balancer (GWLB)**
+When to use:
+- HTTP/HTTPS only workloads on EKS
+- Need WAF, Cognito auth, native AWS integration
+- Most common EKS production pattern
 
-- Layer: Operates at Layer 3 (Network layer)
-  
-- Use case: For deploying third-party virtual appliances like firewalls, IDS/IPS, etc.
+Pros:
+- Full L7 routing (path, host, header)
+- WAF, ACM TLS, Cognito auth
+- Direct pod targeting (ip mode) = lowest latency
 
- - Key Features:
+Cons:
+- HTTP/HTTPS only — no gRPC without HTTPS, no custom TCP/UDP
+- 1 ALB per Ingress = costly at scale (use group.name annotation to share)
+- Cannot rewrite URLs or do advanced nginx tricks
+```
 
-    - Transparent traffic forwarding using GENEVE protocol
+---
 
-    - Designed for security appliance deployments
+## Interview Q&A
 
-    - Integrates with VPC Endpoints (PrivateLink)
-**4. Classic**
-The Classic Load Balancer (CLB) is the first-generation load balancer provided by AWS. It distributes incoming application or network traffic across multiple EC2 instances in one or more Availability Zones, helping to improve fault tolerance and scalability.
+**Q: When would you choose NLB over ALB?**
+Choose NLB when: (1) you need ultra-low latency (< 100 microseconds vs ALB's milliseconds), (2) you need a static IP per AZ (ALB IPs are dynamic), (3) the protocol isn't HTTP/HTTPS — gRPC without TLS, raw TCP/UDP, custom protocols, (4) you need source IP preservation at layer 4, (5) handling millions of concurrent connections (NLB scales to 10M+ simultaneously). Choose ALB for: web apps, REST APIs, content-based routing, WAF, authentication middleware, and Lambda targets.
 
+**Q: What is the AWS Load Balancer Controller and how does it work?**
+It's a Kubernetes controller that runs in your EKS cluster and watches Ingress resources. When you create an Ingress with `kubernetes.io/ingress.class: alb` annotation, the controller automatically provisions an AWS ALB, creates target groups, registers pods (ip mode) or nodes (instance mode) as targets, and configures routing rules from the Ingress spec. It also handles deregistration during pod termination. This replaces the classic approach of manually creating ALBs — everything is declarative and driven by Kubernetes resources.
 
-# Architectures using Load Balancers in k8s for external Traffic
-
-**1. DNS + Ngnix Controller(NodePort IP):**
-
-- Your subents should be public and the nodes should have public ips
-
-- Will deploy a ngnix controller with nodeport ip service 
-
-- In dns we will put public ip of all the nodes and will apply routing policy that will do a l4 routing to controller pods
- 
-- Later the traffic will come to controller and the L7 load balancing will happen
-
-- *Cons:*
-  - No Active Health Checking:
-
-    - Route 53 does not natively know if a node is up or if the NodePort is reachable — unless you configure Route 53 health checks, which adds complexity and cost.
-
-  - Uneven Load Distribution:
-    - DNS-based load balancing isn’t very accurate.
-    - Clients often cache DNS responses or prefer one IP.
-    - This leads to uneven load across nodes (especially with mobile clients or CDNs).
-
-  - No Connection Draining or Session Stickiness:
-    - If a node is being taken down, clients may still hit it (unless DNS TTLs are super low).
-
-  - No Security Controls:
-
-    - Without a cloud LB (NLB/ALB), you don’t get IP whitelisting, WAF, etc., at the edge.
-
-- *Can Be Used When:*
-  - Bare metal/on-prem cluster
-  - Lab/demo/test environments
-  - You manage your own edge LB
-  - You implement Route 53 health checks per node IP
-
-**2. DNS + NLB + Ngnix Controller(LoadBalancer IP):**
-
-- subnets can be public or private, to expose traffic we will use internet facing nlb
-
-- Create a ingress controller with Loadbalancer IP, that will create a nlb according to your configuration and will assing an external ip as the nlb loadbalancer url
-
-- Traffic will come through the dns to nlb and there we will define Target groups to distribute the traffic further to ngnix pods and the rest will be taken care by the controller 
-
-- *Cons:*
-
-  - You lose AWS-native protections unless you put another WAF in front.
-
-  - If you deploy multiple NGINX controllers behind NLB, failover is tied to NLB health checks, not as dynamic as ALB target groups.
-
-- *Pros*
-
-  - You get support for protocols like gRPC, WebSockets (NLB handles L4 passthrough well)
-
-  - Cost-sensitive and avoids multiple ALBs
-
-  - Protocols Supported by AWS NLB:
-    - TCP, UDP, TLS, gRPC, websockets, QUIC, HTTP/HTTPS
-
-**3. DNS + ALB + Load Balancer Controller(LoadBalancer IP):**
-
-- You define an Ingress resource (e.g., with annotations for TLS, routing, etc.).
-
-- The AWS Load Balancer Controller detects it and automatically provisions an ALB.
-
-- The ALB:
-    - Handles TLS termination (via ACM if specified).
-    - Performs host/path-based routing.
-    - Forwards requests to target groups containing your Kubernetes pods (via NodePort or IP mode).
-
-- The controller is an internal component; it’s not exposed to the internet.
-
-- By default, 1 ALB per Ingress. Can be costly in large environments (workarounds exist via alb.ingress.kubernetes.io/group.name).
-
-- Only supports HTTP/HTTPS (L7). Cannot use for gRPC without TLS or any non-HTTP protocols.
-
-- Can't manipulate headers or do rewrites like NGINX can.
-
-- No full WebSocket support without HTTPS
-
-- gRPC only works properly over HTTPS.
-
-
-
-
-
-
-
+**Q: What is the difference between ALB target type "ip" vs "instance"?**
+`target type: ip` registers pod IP addresses directly as targets — requires AWS VPC CNI plugin (pod IPs must be VPC-routable). ALB bypasses the NodePort+kube-proxy chain, reducing latency and providing pod-level health checks. `target type: instance` registers node:nodePort — works with any CNI plugin but adds kube-proxy hop and node-level health checks (less granular). For EKS with VPC CNI, `ip` mode is preferred. For self-managed clusters or Karpenter nodes, `instance` mode may be needed.
