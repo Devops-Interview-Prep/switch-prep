@@ -39,6 +39,7 @@ organised by topic:
 | [AWS/](AWS/) | 5 | EC2, S3, CloudFront, CloudTrail, autoscaling |
 | [ArgoCD/](ArgoCD/) | 1 | GitOps and continuous delivery |
 | [InterView Questions/](InterView%20Questions/) | 1 | Company-specific question logs |
+| [interviews/](interviews/) | 9 | Per-company, per-round prep notes (Rupeek Tech Lead DevOps Round 1) |
 
 Supporting files: [AboutMe.md](AboutMe.md), [SwitchReasons.md](SwitchReasons.md), and
 [HiringManagerln.txt](HiringManagerln.txt) hold personal interview material. The
