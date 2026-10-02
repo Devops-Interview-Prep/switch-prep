@@ -1,13 +1,199 @@
 # 🧩 Terraform Syntax — Complete Reference
-**57 Slides · Variables → Data Sources → Loops → Meta-Arguments → Dynamic Blocks → Null Resource → Credentials**
+**Terraform Block → Variables → Data Sources → Loops → Meta-Arguments → Dynamic Blocks → Null Resource → Credentials → Modules → Functions → Import & Check**
 
 ---
 
-# 🗂️ Variables & Outputs
+## ⚙️ Terraform Block & Providers
 
 ---
 
-# 1️⃣ What Are Input Variables?
+### 1️⃣ The `terraform` Block — Every Config Starts Here
+
+The `terraform` block configures Terraform itself, not infrastructure. It is the only block that cannot use variables or expressions — it is read before evaluation begins.
+
+```hcl
+terraform {
+  required_version = ">= 1.5.0"          # ← which Terraform CLI may run this
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"          # ← registry address, NOT just "aws"
+      version = "~> 5.0"                 # ← pessimistic constraint
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.5"
+    }
+  }
+}
+```
+
+> ⚠️ **Watch out:** Omitting `source` makes Terraform assume `hashicorp/<name>`. That silently breaks for community providers — always write it explicitly.
+
+> 💡 **Takeaway:** `required_version` guards the CLI; `required_providers` guards the plugins. Pin both or your CI and laptop will disagree.
+
+---
+
+### 2️⃣ Version Constraint Operators
+
+```hcl
+version = "5.31.0"      # exact — reproducible, but manual upgrades
+version = ">= 5.0"      # minimum — accepts 6.x breaking changes ⚠️
+version = "~> 5.0"      # allows 5.1, 5.99 — blocks 6.0  (pessimistic, major-safe)
+version = "~> 5.31.0"   # allows 5.31.4 — blocks 5.32.0  (patch-only)
+version = ">= 5.0, < 6.0"   # explicit range — same effect as ~> 5.0
+```
+
+| Operator | Meaning | Use when |
+|---|---|---|
+| `=` / bare | Exactly this version | Locking a known-good release |
+| `>=` | This or newer | Rarely — allows breaking majors |
+| `~>` | Rightmost component may increment | **Default choice** for providers |
+| `!=` | Exclude a version | Skipping a known-broken release |
+
+> ✅ **Rule:** `~>` on the minor (`~> 5.0`) for providers, and commit `.terraform.lock.hcl` so every run resolves identically.
+
+---
+
+### 3️⃣ The Dependency Lock File
+
+```bash
+.terraform.lock.hcl       # ← COMMIT THIS. Records exact provider versions + checksums.
+
+terraform init            # creates/respects the lock file
+terraform init -upgrade   # re-resolves within constraints, updates the lock
+```
+
+```hcl
+# .terraform.lock.hcl (generated — do not hand-edit)
+provider "registry.terraform.io/hashicorp/aws" {
+  version     = "5.31.0"
+  constraints = "~> 5.0"
+  hashes      = ["h1:abc123...", "zh:def456..."]
+}
+```
+
+> ⚠️ **Watch out:** Lock files record hashes per platform. If CI runs Linux and you run macOS, `terraform providers lock -platform=linux_amd64 -platform=darwin_arm64` adds both — otherwise CI fails on a checksum mismatch.
+
+---
+
+### 4️⃣ Backend Configuration — Remote State
+
+```hcl
+terraform {
+  backend "s3" {
+    bucket       = "my-tfstate-prod"
+    key          = "network/terraform.tfstate"   # ← path WITHIN the bucket
+    region       = "ap-south-1"
+    encrypt      = true                          # ← SSE at rest
+    use_lockfile = true                          # ← S3-native locking (1.10+)
+  }
+}
+```
+
+> ⚠️ **Watch out:** The backend block **cannot use variables, locals, or any expression** — it is parsed before evaluation. This is the single most common "why won't this interpolate?" question.
+
+```bash
+# Supply the dynamic parts at init time instead:
+terraform init \
+  -backend-config="bucket=my-tfstate-${ENV}" \
+  -backend-config="key=network/${ENV}.tfstate"
+
+# Or keep per-environment files:
+terraform init -backend-config=envs/prod.s3.tfbackend
+```
+
+> 💬 **Say:** "Backend config is static by design, so we pass environment-specific values with `-backend-config` from CI rather than interpolating."
+
+---
+
+### 5️⃣ State Locking — Why It Exists
+
+```mermaid
+sequenceDiagram
+    participant A as Engineer A
+    participant L as Lock (S3/DynamoDB)
+    participant S as State File
+    participant B as Engineer B
+    A->>L: acquire lock
+    L-->>A: granted
+    A->>S: read state, apply changes
+    B->>L: acquire lock
+    L-->>B: DENIED — held by A
+    A->>S: write new state
+    A->>L: release lock
+    B->>L: acquire lock
+    L-->>B: granted
+```
+
+Without locking, two concurrent applies read the same state, each writes its own result, and the second overwrites the first — resources become orphaned and untracked.
+
+> 💡 **Takeaway:** Historically S3 needed a DynamoDB table for locking. Terraform 1.10+ supports native S3 locking via `use_lockfile = true`, removing that extra table.
+
+---
+
+### 6️⃣ Provider Configuration & Aliases
+
+```hcl
+provider "aws" {
+  region = "ap-south-1"                 # ← default provider for this config
+
+  default_tags {                        # ← applied to EVERY resource automatically
+    tags = {
+      ManagedBy   = "terraform"
+      Environment = var.environment
+    }
+  }
+}
+
+provider "aws" {
+  alias  = "us_east"                    # ← a SECOND aws provider
+  region = "us-east-1"
+}
+
+# ACM certs for CloudFront MUST live in us-east-1
+resource "aws_acm_certificate" "cdn" {
+  provider          = aws.us_east       # ← select the aliased provider
+  domain_name       = "cdn.example.com"
+  validation_method = "DNS"
+}
+```
+
+> ✅ **Rule:** `default_tags` beats hand-tagging every resource — it is the cheapest cost-allocation win in a real account.
+
+---
+
+### 7️⃣ Terraform Block & Providers · Interview Q&A
+
+**Q: Why can't you use variables in the backend block?**
+- The backend is initialised before Terraform evaluates variables, so no expression is available yet
+- Pass values with `-backend-config` flags or a `.tfbackend` file from CI
+
+**Q: What does `~> 5.0` allow and what does it block?**
+- Allows any `5.x` — `5.1`, `5.99` — and blocks `6.0`
+- `~> 5.31.0` is narrower: patch bumps only, `5.31.4` yes, `5.32.0` no
+
+**Q: Should `.terraform.lock.hcl` be committed?**
+- Yes — it pins exact provider versions and checksums so CI and laptops resolve identically
+- It is the provider equivalent of `package-lock.json`
+
+**Q: How do you deploy into two regions in one config?**
+- Declare a second `provider` block with an `alias`, then set `provider = aws.<alias>` on the resource
+- For modules, pass them explicitly: `providers = { aws = aws.us_east }`
+
+**Q: What is state locking and what breaks without it?**
+- A mutex so only one apply mutates state at a time
+- Without it, concurrent applies overwrite each other's state and orphan real resources
+
+> 💬 **Say:** "Pin the CLI and providers, commit the lock file, and keep state remote, encrypted, and locked — that is the baseline before any resource gets written."
+
+---
+
+## 🗂️ Variables & Outputs
+
+---
+
+### 1️⃣ What Are Input Variables?
 
 Variables are the **public API** of your module — they let the same code work across environments.
 
@@ -25,7 +211,7 @@ variable "environment" {
 
 ---
 
-# 2️⃣ Variable Types: Primitives
+### 2️⃣ Variable Types: Primitives
 
 Terraform supports `string`, `number`, and `bool` as primitive types, each with optional validation.
 
@@ -55,7 +241,7 @@ variable "instance_count" {
 
 ---
 
-# 3️⃣ Variable Types: Collections & Sensitive
+### 3️⃣ Variable Types: Collections & Sensitive
 
 ```hcl
 variable "availability_zones" {
@@ -87,7 +273,7 @@ variable "db_password" {
 
 ---
 
-# 4️⃣ Output Variables
+### 4️⃣ Output Variables
 
 ```hcl
 output "instance_ip" {
@@ -110,7 +296,7 @@ resource "aws_security_group_rule" "example" {
 
 ---
 
-# 5️⃣ tfvars Files
+### 5️⃣ tfvars Files
 
 ```hcl
 # terraform.tfvars
@@ -131,7 +317,7 @@ terraform apply -var-file=myvars-1.tfvars \
 
 ---
 
-# 6️⃣ Variable Precedence (Highest → Lowest)
+### 6️⃣ Variable Precedence (Highest → Lowest)
 
 | Priority | Source | Example |
 |----------|--------|---------|
@@ -152,7 +338,7 @@ terraform apply -var-file=environments/prod.tfvars      # env-specific bundle
 
 ---
 
-# 7️⃣ Locals vs Variables — Comparison
+### 7️⃣ Locals vs Variables — Comparison
 
 | | `variable` | `local` |
 |--|-----------|---------|
@@ -166,7 +352,7 @@ terraform apply -var-file=environments/prod.tfvars      # env-specific bundle
 
 ---
 
-# 8️⃣ Locals in Practice
+### 8️⃣ Locals in Practice
 
 ```hcl
 variable "project"     { default = "myapp" }
@@ -195,7 +381,7 @@ resource "aws_instance" "web" {
 
 ---
 
-# 9️⃣ Variables · Interview Q&A
+### 9️⃣ Variables · Interview Q&A
 
 **Q: What is the variable precedence order — which wins?**
 - `-var` CLI flag wins over everything; then `-var-file`, then `*.auto.tfvars`, then `terraform.tfvars`
@@ -219,11 +405,11 @@ resource "aws_instance" "web" {
 
 ---
 
-# 🗂️ Data Sources
+## 🗂️ Data Sources
 
 ---
 
-# 🎯 What Are Data Sources?
+### 🎯 What Are Data Sources?
 
 | Property | `data` block | `resource` block |
 |---|---|---|
@@ -241,7 +427,7 @@ resource "aws_instance" "web" {
 
 ---
 
-# 🖼️ aws_ami — Latest AMI Lookup
+### 🖼️ aws_ami — Latest AMI Lookup
 
 ```hcl
 data "aws_ami" "amazon_linux" {
@@ -267,7 +453,7 @@ resource "aws_instance" "web" {
 
 ---
 
-# 🌐 aws_vpc + aws_subnets — Existing Network Lookup
+### 🌐 aws_vpc + aws_subnets — Existing Network Lookup
 
 ```hcl
 data "aws_vpc" "main" {
@@ -294,7 +480,7 @@ data "aws_subnets" "private" {
 
 ---
 
-# 🌍 aws_route53_zone + Creating Records
+### 🌍 aws_route53_zone + Creating Records
 
 ```hcl
 data "aws_route53_zone" "main" {
@@ -319,7 +505,7 @@ resource "aws_route53_record" "api" {
 
 ---
 
-# 🔑 aws_iam_role + aws_secretsmanager_secret_version
+### 🔑 aws_iam_role + aws_secretsmanager_secret_version
 
 ```hcl
 data "aws_iam_role" "eks_node_role" {
@@ -349,7 +535,7 @@ resource "aws_db_instance" "postgres" {
 
 ---
 
-# 🖥️ External Data Source — Run a Script
+### 🖥️ External Data Source — Run a Script
 
 ```hcl
 data "external" "git_hash" {
@@ -373,7 +559,7 @@ The `external` data source program must:
 
 ---
 
-# 📊 Data vs Resource Comparison
+### 📊 Data vs Resource Comparison
 
 | Question | `data` | `resource` |
 |---|---|---|
@@ -388,7 +574,7 @@ The `external` data source program must:
 
 ---
 
-# 🎤 Data Sources · Interview Q&A
+### 🎤 Data Sources · Interview Q&A
 
 **Q: When do you use a data source instead of a resource?**
 - Use `data` when the resource is managed outside Terraform: created manually, by another team, or in another state
@@ -402,11 +588,11 @@ The `external` data source program must:
 
 ---
 
-# 🗂️ Loops
+## 🗂️ Loops
 
 ---
 
-# 1️⃣ Loops with `count` (Basic)
+### 1️⃣ Loops with `count` (Basic)
 
 `count` creates N copies of a resource using a numeric index starting at 0.
 
@@ -431,7 +617,7 @@ resource "aws_iam_user" "example" {
 
 ---
 
-# 2️⃣ `count` with Sets and Maps
+### 2️⃣ `count` with Sets and Maps
 
 ```hcl
 variable "my_set" {
@@ -453,7 +639,7 @@ resource "my_resource" "from_set" {
 
 ---
 
-# 3️⃣ Loops with `for_each` (Basic)
+### 3️⃣ Loops with `for_each` (Basic)
 
 `for_each` creates one resource per item in a `set(string)` or `map`, using a stable **string key** as the resource's identity.
 
@@ -486,7 +672,7 @@ resource "aws_iam_user" "from_map" {
 
 ---
 
-# 4️⃣ The count vs for_each Deletion Gotcha ⚠️
+### 4️⃣ The count vs for_each Deletion Gotcha ⚠️
 
 **This is the most important concept in Terraform loops.**
 
@@ -512,7 +698,7 @@ BEFORE ["a","b","c"]:          AFTER removing "b":
 
 ---
 
-# 5️⃣ count vs for_each — Decision Table
+### 5️⃣ count vs for_each — Decision Table
 
 | Situation | Use | Example |
 |-----------|-----|---------|
@@ -527,7 +713,7 @@ BEFORE ["a","b","c"]:          AFTER removing "b":
 
 ---
 
-# 6️⃣ `for` Expressions: List & Map Comprehensions
+### 6️⃣ `for` Expressions: List & Map Comprehensions
 
 `for` expressions transform collections inside `locals` or `output` blocks — they produce new lists or maps, they do not create resources.
 
@@ -553,7 +739,7 @@ locals {
 
 ---
 
-# 7️⃣ `for` Expressions: Iterating Maps
+### 7️⃣ `for` Expressions: Iterating Maps
 
 ```hcl
 variable "iam_users" {
@@ -580,7 +766,7 @@ locals {
 
 ---
 
-# 8️⃣ `for_each` with Complex Maps (Objects)
+### 8️⃣ `for_each` with Complex Maps (Objects)
 
 ```hcl
 variable "users" {
@@ -615,7 +801,7 @@ resource "aws_iam_user_group_membership" "membership" {
 
 ---
 
-# 9️⃣ Dynamic Lookup with `locals` + `setproduct` + `flatten`
+### 9️⃣ Dynamic Lookup with `locals` + `setproduct` + `flatten`
 
 ```hcl
 locals {
@@ -657,7 +843,7 @@ locals {
 
 ---
 
-# 🔟 Loops · Interview Q&A
+### 🔟 Loops · Interview Q&A
 
 **Q: Why does `count` with a list cause unexpected resource recreation?**
 - `count` uses list indices as resource addresses: `resource[0]`, `resource[1]`, `resource[2]`
@@ -686,11 +872,11 @@ locals {
 
 ---
 
-# 🗂️ Meta-Arguments
+## 🗂️ Meta-Arguments
 
 ---
 
-# ⚙️ What Are Meta-Arguments?
+### ⚙️ What Are Meta-Arguments?
 
 | Meta-Argument | Purpose |
 |---|---|
@@ -706,7 +892,7 @@ locals {
 
 ---
 
-# 🔗 depends_on — Hidden Dependencies
+### 🔗 depends_on — Hidden Dependencies
 
 ```hcl
 # HIDDEN DEPENDENCY: Lambda needs the policy ATTACHED, not just the role
@@ -732,7 +918,7 @@ resource "aws_instance" "web" {
 
 ---
 
-# 🔢 lifecycle: create_before_destroy
+### 🔢 lifecycle: create_before_destroy
 
 ```hcl
 resource "aws_db_instance" "main" {
@@ -756,7 +942,7 @@ resource "aws_db_instance" "main" {
 
 ---
 
-# 🛡️ lifecycle: prevent_destroy + ignore_changes
+### 🛡️ lifecycle: prevent_destroy + ignore_changes
 
 ```hcl
 resource "aws_db_instance" "main" {
@@ -781,7 +967,7 @@ resource "aws_db_instance" "main" {
 
 ---
 
-# 🔁 lifecycle: replace_triggered_by + precondition / postcondition
+### 🔁 lifecycle: replace_triggered_by + precondition / postcondition
 
 ```hcl
 resource "aws_autoscaling_group" "app" {
@@ -810,7 +996,7 @@ resource "aws_autoscaling_group" "app" {
 
 ---
 
-# 🌐 provider Meta-Argument — Aliased Providers
+### 🌐 provider Meta-Argument — Aliased Providers
 
 ```hcl
 provider "aws" {
@@ -839,7 +1025,7 @@ module "vpc_dr" {
 
 ---
 
-# 📦 moved Block — Rename Without Destroying
+### 📦 moved Block — Rename Without Destroying
 
 ```hcl
 # RENAME RESOURCE WITHOUT RECREATION (Terraform 1.1+)
@@ -863,7 +1049,7 @@ moved {
 
 ---
 
-# 🗑️ removed Block — Stop Managing Without Destroying
+### 🗑️ removed Block — Stop Managing Without Destroying
 
 ```hcl
 # ORPHAN A RESOURCE FROM STATE WITHOUT DELETING IT (Terraform 1.7+)
@@ -884,7 +1070,7 @@ removed {
 
 ---
 
-# 🎤 Meta-Arguments · Interview Q&A
+### 🎤 Meta-Arguments · Interview Q&A
 
 **Q: When would you use `create_before_destroy` and what is the risk?**
 - Use for resources where downtime is unacceptable during replacement: RDS, ELB, ACM certs
@@ -904,11 +1090,11 @@ removed {
 
 ---
 
-# 🗂️ Dynamic Blocks
+## 🗂️ Dynamic Blocks
 
 ---
 
-# 🔄 What Problem Do Dynamic Blocks Solve?
+### 🔄 What Problem Do Dynamic Blocks Solve?
 
 Without dynamic blocks, repeated nested blocks must be copy-pasted manually:
 
@@ -929,7 +1115,7 @@ resource "aws_security_group" "main" {
 
 ---
 
-# 📐 Basic Dynamic Block — Security Group Ingress
+### 📐 Basic Dynamic Block — Security Group Ingress
 
 ```hcl
 locals {
@@ -961,7 +1147,7 @@ resource "aws_security_group" "main" {
 
 ---
 
-# 💾 Dynamic EBS Volumes
+### 💾 Dynamic EBS Volumes
 
 ```hcl
 variable "ebs_volumes" {
@@ -995,7 +1181,7 @@ resource "aws_instance" "web" {
 
 ---
 
-# 📜 Dynamic IAM Policy Statements
+### 📜 Dynamic IAM Policy Statements
 
 ```hcl
 variable "s3_buckets" {
@@ -1026,7 +1212,7 @@ data "aws_iam_policy_document" "s3_access" {
 
 ---
 
-# 🎛️ Conditional Block — The 0/1 Trick
+### 🎛️ Conditional Block — The 0/1 Trick
 
 ```hcl
 variable "enable_deletion_protection" { default = false }
@@ -1058,7 +1244,7 @@ resource "aws_instance" "web" {
 
 ---
 
-# 🏷️ iterator Label — Resolving Name Clashes
+### 🏷️ iterator Label — Resolving Name Clashes
 
 ```hcl
 dynamic "ingress" {
@@ -1081,7 +1267,7 @@ dynamic "ingress" {
 
 ---
 
-# 🎤 Dynamic Blocks · Interview Q&A
+### 🎤 Dynamic Blocks · Interview Q&A
 
 **Q: When should you use dynamic blocks vs `for_each` on resources?**
 - `for_each` on a resource creates multiple separate, independently tracked resources in state
@@ -1097,11 +1283,11 @@ dynamic "ingress" {
 
 ---
 
-# 🗂️ Null Resource & terraform_data
+## 🗂️ Null Resource & terraform_data
 
 ---
 
-# ⚡ What Is null_resource and When to Use It?
+### ⚡ What Is null_resource and When to Use It?
 
 `null_resource` is a fake resource with no cloud footprint — it creates nothing in AWS, GCP, or Azure. Its only purpose is to provide a hook for running commands at the right point in Terraform's dependency graph.
 
@@ -1117,7 +1303,7 @@ dynamic "ingress" {
 
 ---
 
-# 🗄️ null_resource local-exec — DB Seed Example
+### 🗄️ null_resource local-exec — DB Seed Example
 
 ```hcl
 resource "null_resource" "db_seed" {
@@ -1143,7 +1329,7 @@ resource "null_resource" "db_seed" {
 
 ---
 
-# 🖥️ null_resource remote-exec — SSH Provisioner
+### 🖥️ null_resource remote-exec — SSH Provisioner
 
 ```hcl
 resource "null_resource" "configure_app" {
@@ -1168,7 +1354,7 @@ resource "null_resource" "configure_app" {
 
 ---
 
-# 🔁 triggers Map Mechanics
+### 🔁 triggers Map Mechanics
 
 ```hcl
 resource "null_resource" "redeploy" {
@@ -1191,7 +1377,7 @@ resource "null_resource" "redeploy" {
 
 ---
 
-# 🆚 null_resource vs terraform_data (Terraform 1.4+)
+### 🆚 null_resource vs terraform_data (Terraform 1.4+)
 
 ```hcl
 resource "terraform_data" "db_seed" {
@@ -1215,7 +1401,7 @@ resource "terraform_data" "db_seed" {
 
 ---
 
-# 🎤 Null Resource · Interview Q&A
+### 🎤 Null Resource · Interview Q&A
 
 **Q: When should you use null_resource instead of a provisioner on the main resource?**
 - Use `null_resource` when the action depends on multiple resources, not just one
@@ -1231,11 +1417,11 @@ resource "terraform_data" "db_seed" {
 
 ---
 
-# 🗂️ Handling AWS Credentials
+## 🗂️ Handling AWS Credentials
 
 ---
 
-# 🚦 Three Approaches Ranked by Risk
+### 🚦 Three Approaches Ranked by Risk
 
 | Rank | Approach | Risk Level | Use Case |
 |---|---|---|---|
@@ -1248,21 +1434,21 @@ resource "terraform_data" "db_seed" {
 
 ---
 
-# ⚠️ Hardcoded vs Environment Variables
+### ⚠️ Hardcoded vs Environment Variables
 
 ```hcl
 # ANTI-PATTERN: HARDCODED CREDENTIALS — LEAKS VIA GIT HISTORY FOREVER
 provider "aws" {
   region     = "eu-central-1"
-  access_key = "AKIATQ37NXB2HS7IVM5R"          # ← ends up in git history permanently
-  secret_key = "MJy5JX6HIqHwP9gLAv+22kff..."   # ← fatal — rotate immediately if committed
+  access_key = "AKIAIOSFODNN7EXAMPLE"          # ← ends up in git history permanently
+  secret_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"   # ← fatal — rotate immediately if committed
 }
 ```
 
 ```bash
 # ACCEPTABLE: ENVIRONMENT VARIABLES — NO GIT LEAK, BUT STILL STATIC KEYS
-export AWS_ACCESS_KEY_ID="AKIATQ37NXB2HS7IVM5R"
-export AWS_SECRET_ACCESS_KEY="MJy5JX6HIqHwP9..."
+export AWS_ACCESS_KEY_ID="AKIAIOSFODNN7EXAMPLE"
+export AWS_SECRET_ACCESS_KEY="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 export AWS_SESSION_TOKEN="..."   # if using temporary credentials
 
 terraform plan  # Terraform picks these up automatically
@@ -1272,7 +1458,7 @@ terraform plan  # Terraform picks these up automatically
 
 ---
 
-# 📋 Credential Precedence Order
+### 📋 Credential Precedence Order
 
 | Priority | Source | Notes |
 |---|---|---|
@@ -1286,7 +1472,7 @@ terraform plan  # Terraform picks these up automatically
 
 ---
 
-# 🏆 IAM Role Best Practice — No Static Credentials
+### 🏆 IAM Role Best Practice — No Static Credentials
 
 ```hcl
 provider "aws" {
@@ -1306,7 +1492,7 @@ provider "aws" {
 
 ---
 
-# 🔐 GitHub Actions OIDC — No Stored Secrets
+### 🔐 GitHub Actions OIDC — No Stored Secrets
 
 ```yaml
 jobs:
@@ -1330,7 +1516,7 @@ jobs:
 
 ---
 
-# 📄 IAM Trust Policy for OIDC
+### 📄 IAM Trust Policy for OIDC
 
 ```json
 {
@@ -1356,7 +1542,7 @@ jobs:
 
 ---
 
-# 🏢 assume_role Multi-Account Pattern + Anti-Patterns
+### 🏢 assume_role Multi-Account Pattern + Anti-Patterns
 
 ```hcl
 provider "aws" {
@@ -1380,7 +1566,7 @@ provider "aws" {
 
 ---
 
-# 🎤 Credentials · Interview Q&A
+### 🎤 Credentials · Interview Q&A
 
 **Q: How do you handle Terraform credentials in CI/CD securely?**
 - Best practice: OIDC — no stored secrets anywhere
@@ -1397,5 +1583,525 @@ provider "aws" {
 - CloudTrail shows the assumed role and `session_name` for every API call — full auditability
 
 > 💬 **Say:** "One CI role, assume_role per target account — no per-account credentials stored anywhere."
+
+---
+
+## 📦 Modules
+
+---
+
+### 1️⃣ Module Anatomy — Calling vs Writing
+
+```mermaid
+flowchart LR
+    R["Root module<br/>main.tf"] -->|"inputs: var"| M["Child module<br/>modules/vpc"]
+    M -->|"outputs"| R
+    M --> AWS["AWS resources"]
+    R --> REG["Registry module<br/>terraform-aws-modules/vpc/aws"]
+    REG --> AWS
+```
+
+```hcl
+# CALLING a module
+module "vpc" {
+  source  = "terraform-aws-modules/vpc/aws"
+  version = "~> 5.0"              # ← registry sources only
+
+  name = "prod-vpc"               # ← becomes var.name inside the module
+  cidr = "10.0.0.0/16"
+}
+
+# CONSUMING its outputs
+resource "aws_instance" "app" {
+  subnet_id = module.vpc.private_subnets[0]   # ← module.<name>.<output>
+}
+```
+
+> 💡 **Takeaway:** A module is just a directory of `.tf` files. The "root module" is wherever you run `terraform apply`; everything else is a child.
+
+---
+
+### 2️⃣ Module Sources — Every Form
+
+```hcl
+source = "./modules/vpc"                                  # local path
+source = "../shared/networking"                           # relative local
+source = "terraform-aws-modules/vpc/aws"                  # public registry
+source = "app.terraform.io/my-org/vpc/aws"                # private registry
+source = "git::https://github.com/org/repo.git//vpc?ref=v1.2.0"   # git + subdir + tag
+source = "git::ssh://git@github.com/org/repo.git?ref=main"        # git over SSH
+source = "github.com/org/repo//modules/vpc?ref=v1.2.0"            # GitHub shorthand
+source = "s3::https://bucket.s3.amazonaws.com/vpc.zip"            # archive
+```
+
+| Source type | Supports `version`? | Pin with |
+|---|---|---|
+| Registry | ✅ Yes | `version = "~> 5.0"` |
+| Git | ❌ No | `?ref=v1.2.0` in the URL |
+| Local path | ❌ No | N/A — shares the caller's repo |
+
+> ⚠️ **Watch out:** `version` is **only** valid for registry sources. On a git source it is a hard error — pin with `?ref=` instead, and always pin to a **tag**, never a branch.
+
+> ✅ **Rule:** `//` separates the repo from the subdirectory inside it: `git::https://host/repo.git//path/to/module?ref=tag`.
+
+---
+
+### 3️⃣ Module Inputs, Outputs & Passing Providers
+
+```hcl
+# modules/vpc/variables.tf — the module's public API
+variable "cidr" {
+  type        = string
+  description = "VPC CIDR range"
+}
+
+# modules/vpc/outputs.tf — the only values callers can read
+output "vpc_id" {
+  value       = aws_vpc.this.id
+  description = "ID of the created VPC"
+}
+
+# Root — passing an ALIASED provider into a child module
+module "dr_site" {
+  source = "./modules/app"
+
+  providers = {
+    aws = aws.us_east            # ← module's default aws = our us_east alias
+  }
+}
+```
+
+> ⚠️ **Watch out:** A child module does **not** inherit aliased providers automatically — only the default one. Forgetting `providers = {}` silently deploys to the wrong region.
+
+> 💡 **Takeaway:** Anything not declared as an `output` is invisible to the caller. Modules have no "private variable access" — the output block *is* the boundary.
+
+---
+
+### 4️⃣ `count`, `for_each` and `depends_on` on Modules
+
+```hcl
+# Modules support meta-arguments since Terraform 0.13
+module "team_bucket" {
+  source   = "./modules/bucket"
+  for_each = toset(["payments", "search", "identity"])
+
+  name = "${each.key}-artifacts"
+}
+
+# Reference: module.team_bucket["payments"].bucket_arn
+
+module "optional_monitoring" {
+  source = "./modules/monitoring"
+  count  = var.environment == "prod" ? 1 : 0    # ← conditional module
+}
+```
+
+> ⚠️ **Watch out:** With `count`, the module becomes a **list** — `module.optional_monitoring[0].x`. Referencing it without the index is an error, and the resource vanishes when count is 0, so guard reads with `try()` or `one()`.
+
+---
+
+### 5️⃣ Module Design — What Good Looks Like
+
+```text
+modules/vpc/
+├── main.tf          # resources
+├── variables.tf     # inputs  (the public API)
+├── outputs.tf       # outputs (the public API)
+├── versions.tf      # required_providers for THIS module
+└── README.md        # usage example
+```
+
+| Do | Don't |
+|---|---|
+| Accept a `tags` map input | Hardcode tags inside the module |
+| Declare `required_providers` in `versions.tf` | Declare a `provider` block inside the module |
+| Return IDs/ARNs as outputs | Make callers guess resource names |
+| Keep modules single-purpose | Build one "mega-module" for the whole stack |
+
+> ⚠️ **Watch out:** Never put a configured `provider` block inside a reusable module. It prevents the module being used with aliases and blocks its removal from state cleanly.
+
+> 💡 **Takeaway:** Prefer **thin** modules composed in the root over deep nesting — three levels down, debugging a plan becomes guesswork.
+
+---
+
+### 6️⃣ Modules · Interview Q&A
+
+**Q: How do you pin a module version from git?**
+- `version` does not work on git sources — use `?ref=v1.2.0` in the URL
+- Pin to an immutable tag or commit SHA; a branch ref silently changes under you
+
+**Q: How do you pass a non-default provider to a module?**
+- `providers = { aws = aws.us_east }` in the module block
+- Child modules inherit only the *default* provider, never aliases
+
+**Q: What happens when a module has `count = 0`?**
+- The module and everything in it is destroyed; references become empty lists
+- Guard reads with `one(module.x)` or `try(module.x[0].id, null)`
+
+**Q: Why avoid provider blocks inside modules?**
+- It makes the module unusable with aliases and multi-region callers
+- It also blocks clean removal — Terraform needs the provider to destroy what it created
+
+**Q: How do you refactor a resource into a module without destroying it?**
+- Use a `moved` block mapping the old address to `module.<name>.<resource>`
+- Terraform rewrites state addresses rather than planning destroy/create
+
+> 💬 **Say:** "Modules are the API boundary — inputs, outputs, and a pinned version. Provider config stays in the root."
+
+---
+
+## 🧮 Functions, Expressions & Named Values
+
+---
+
+### 1️⃣ Named Values — Everything You Can Reference
+
+```hcl
+var.name                  # input variable
+local.name                # local value
+data.aws_ami.ubuntu.id    # data source attribute
+module.vpc.vpc_id         # module output
+aws_instance.web.id       # managed resource attribute
+
+count.index               # 0-based index inside a count block
+each.key / each.value     # inside a for_each block
+self.private_ip           # ONLY inside provisioners / connection blocks
+
+path.module               # directory of the module being evaluated
+path.root                 # directory of the root module
+path.cwd                  # process working directory
+terraform.workspace       # current workspace name
+```
+
+```hcl
+# Classic uses
+user_data = templatefile("${path.module}/init.sh.tftpl", { port = 8080 })
+bucket    = "logs-${terraform.workspace}"
+```
+
+> ⚠️ **Watch out:** `self` is only valid inside `provisioner` and `connection` blocks. Anywhere else it is a cycle — reference the resource by name instead.
+
+> 💡 **Takeaway:** Use `path.module` (not `path.root`) for files shipped *with* a module, or it breaks the moment someone calls the module from elsewhere.
+
+---
+
+### 2️⃣ Conditionals, Splat & Operators
+
+```hcl
+# Ternary conditional
+instance_type = var.environment == "prod" ? "m5.large" : "t3.micro"
+
+# Both branches must be the SAME type — this errors:
+# value = var.flag ? "text" : 42
+
+# Splat expression — pull one attribute from every instance
+output "all_ips" {
+  value = aws_instance.web[*].private_ip     # list of IPs
+}
+
+# Splat over a for_each (map) resource needs values() first
+value = values(aws_instance.web)[*].private_ip
+
+# Operators
+# arithmetic:  + - * / %
+# comparison:  == != < <= > >=
+# logical:     && || !
+```
+
+> ⚠️ **Watch out:** `[*]` works on lists (`count`). For `for_each` resources the result is a **map**, so wrap with `values()` first — a very common plan-time error.
+
+---
+
+### 3️⃣ `try`, `can`, `coalesce` — Defensive Expressions
+
+```hcl
+# try() — return the first expression that evaluates without error
+name = try(var.config.name, var.fallback_name, "default")
+
+# can() — returns a BOOL, used mostly in validation blocks
+variable "cidr" {
+  type = string
+  validation {
+    condition     = can(cidrnetmask(var.cidr))
+    error_message = "Must be a valid CIDR block."
+  }
+}
+
+# coalesce() — first NON-NULL, NON-EMPTY value
+name = coalesce(var.custom_name, var.default_name, "fallback")
+
+# one() — unwrap a 0-or-1 list (count) into a value or null
+vpc_id = one(module.network[*].vpc_id)
+```
+
+| Function | Returns | Catches |
+|---|---|---|
+| `try()` | The value, or next arg | **Errors** (missing key, wrong type) |
+| `can()` | `true` / `false` | **Errors**, as a boolean |
+| `coalesce()` | First non-null/non-empty | **Nulls and empty strings**, not errors |
+
+> ✅ **Rule:** `try()` for optional attributes, `can()` inside `validation`, `coalesce()` for layered defaults.
+
+---
+
+### 4️⃣ Collection Functions — The Ones You Actually Use
+
+```hcl
+merge({a=1}, {b=2})                 # → {a=1, b=2}  — later wins; THE tagging idiom
+concat([1,2],[3])                   # → [1,2,3]
+flatten([[1,2],[3]])                # → [1,2,3]     — un-nest one level
+distinct([1,1,2])                   # → [1,2]
+compact(["a","","b"])               # → ["a","b"]   — drop empty strings
+toset(["a","a"])                    # → set, dedups — required by for_each over lists
+keys({a=1,b=2})                     # → ["a","b"]
+values({a=1,b=2})                   # → [1,2]
+zipmap(["a","b"],[1,2])             # → {a=1,b=2}
+lookup({a=1}, "z", "fallback")      # → "fallback"  — safe map read
+contains([1,2], 2)                  # → true
+length("abc") / length([1,2])       # → 3 / 2
+element([1,2,3], 4)                 # → 2           — index WRAPS around
+slice([1,2,3,4], 1, 3)              # → [2,3]
+setproduct(["a"],[1,2])             # → [["a",1],["a",2]] — cartesian product
+```
+
+```hcl
+# The tagging idiom — module defaults + caller overrides
+tags = merge(
+  local.common_tags,
+  { Name = "${var.name}-app" },
+  var.extra_tags,
+)
+```
+
+> ⚠️ **Watch out:** `element()` wraps instead of erroring on out-of-range — `element(list, 99)` silently returns a real element. Use `list[99]` when you *want* the error.
+
+---
+
+### 5️⃣ String, Encoding & File Functions
+
+```hcl
+# String
+format("%s-%03d", "web", 7)         # → "web-007"
+join("-", ["a","b"])                # → "a-b"
+split(",", "a,b,c")                 # → ["a","b","c"]
+replace("a.b", ".", "-")            # → "a-b"
+lower / upper / title / trimspace
+substr("abcdef", 0, 3)              # → "abc"
+startswith("prod-x", "prod")        # → true
+regex("[0-9]+", "abc123")           # → "123"       — ERRORS if no match
+regexall("[0-9]+", "a1b2")          # → ["1","2"]   — empty list if no match
+
+# Encoding — jsonencode is how you write IAM policies safely
+jsonencode({ Version = "2012-10-17", Statement = [...] })
+jsondecode(file("policy.json"))
+yamlencode({ a = 1 })
+base64encode("hello")
+
+# Files
+file("${path.module}/key.pub")                     # read at PLAN time
+filebase64("${path.module}/lambda.zip")
+fileset(path.module, "configs/*.yaml")             # → set of matching paths
+templatefile("${path.module}/ud.tftpl", { port = 80 })
+```
+
+```hcl
+# templatefile with a loop in the template
+# ud.tftpl:
+#   %{ for ip in server_ips ~}
+#   backend ${ip}:8080
+#   %{ endfor ~}
+user_data = templatefile("${path.module}/ud.tftpl", {
+  server_ips = aws_instance.app[*].private_ip
+})
+```
+
+> ✅ **Rule:** Build IAM policies with `jsonencode()`, never heredoc JSON — you get HCL variable interpolation and a syntax error at plan time instead of a runtime 400.
+
+> ⚠️ **Watch out:** `file()` is evaluated at plan time and **errors if the file does not exist**, even if the resource using it is conditionally disabled.
+
+---
+
+### 6️⃣ Heredocs & Multi-line Strings
+
+```hcl
+# Indented heredoc — <<- strips the LEADING INDENTATION
+user_data = <<-EOT
+  #!/bin/bash
+  echo "starting"
+  systemctl start nginx
+EOT
+
+# Plain heredoc — content must start at column 0
+policy = <<EOT
+{"Version": "2012-10-17"}
+EOT
+```
+
+> 💡 **Takeaway:** Always prefer `<<-EOT` inside nested blocks; plain `<<EOT` forces ugly column-0 content that breaks the file's indentation.
+
+---
+
+### 7️⃣ Functions & Expressions · Interview Q&A
+
+**Q: What is the difference between `try()` and `coalesce()`?**
+- `try()` swallows **errors** — a missing map key or a wrong type
+- `coalesce()` only picks the first **non-null, non-empty** value; an error still fails the plan
+
+**Q: Why does `aws_instance.web[*].id` fail on a `for_each` resource?**
+- `for_each` produces a **map**, not a list, so splat does not apply directly
+- Use `values(aws_instance.web)[*].id`
+
+**Q: How do you render a config file with Terraform values?**
+- `templatefile(path, vars)` — supports `%{ for }` / `%{ if }` directives
+- Keep the template beside the module and reference it via `path.module`
+
+**Q: Can you write your own Terraform function?**
+- Not in core HCL — there are no user-defined functions
+- Terraform 1.8+ allows **provider-defined** functions, called as `provider::aws::arn_parse(...)`
+- Before that, the workaround is a `local` value or an `external` data source
+
+**Q: Why use `jsonencode` for IAM policies?**
+- Native HCL interpolation, validated structure, and a plan-time error instead of a runtime API rejection
+- Heredoc JSON silently ships malformed policies
+
+> 💬 **Say:** "`merge` for tags, `jsonencode` for policies, `try` for optional inputs, `templatefile` for user-data — that covers most real expression work."
+
+---
+
+## 📥 Import & Check Blocks
+
+---
+
+### 1️⃣ The `import` Block — Declarative Adoption
+
+Before Terraform 1.5 the only option was the `terraform import` CLI: imperative, unreviewable, and invisible in a pull request. The `import` block made adoption part of the plan.
+
+```hcl
+# Terraform 1.5+
+import {
+  to = aws_s3_bucket.legacy        # ← the address it will occupy
+  id = "my-existing-bucket-name"   # ← provider-specific identifier
+}
+
+resource "aws_s3_bucket" "legacy" {
+  bucket = "my-existing-bucket-name"
+}
+```
+
+```bash
+terraform plan    # shows "1 to import" — reviewable in a PR
+terraform apply   # adopts it into state, creates nothing
+```
+
+> 💡 **Takeaway:** The `import` block is **declarative and reviewable** — a teammate sees the adoption in the diff. The CLI version happens on someone's laptop with no record.
+
+---
+
+### 2️⃣ Generating Config for Imports
+
+```bash
+# Terraform writes the resource block FOR you
+terraform plan -generate-config-out=generated.tf
+```
+
+```hcl
+# You only write the import block:
+import {
+  to = aws_security_group.legacy
+  id = "sg-0abc123def456"
+}
+# → generated.tf now contains a full aws_security_group block
+```
+
+> ⚠️ **Watch out:** Generated config is a **starting point**, not final. It includes every attribute including read-only ones and needs cleanup before merging.
+
+> ✅ **Rule:** Import blocks are safe to leave in the codebase — they become no-ops once the resource is in state — but deleting them after a successful apply keeps the config clean.
+
+---
+
+### 3️⃣ `import` vs `moved` vs `removed` — The Three State Blocks
+
+```mermaid
+flowchart TD
+    I["import<br/>(1.5+)"] -->|"real resource → state"| S["Terraform State"]
+    M["moved<br/>(1.1+)"] -->|"rename WITHIN state"| S
+    R["removed<br/>(1.7+)"] -->|"drop from state,<br/>keep the real resource"| S
+```
+
+| Block | Since | Effect on state | Effect on real infra |
+|---|---|---|---|
+| `import` | 1.5 | **Adds** an address | None — adopts what exists |
+| `moved` | 1.1 | **Renames** an address | None — no destroy/create |
+| `removed` | 1.7 | **Deletes** an address | None — resource keeps running |
+
+> 💬 **Say:** "All three are state-only operations. None of them touch the live resource — that is exactly why they are safe to use in a refactor."
+
+---
+
+### 4️⃣ `check` Blocks — Assertions That Don't Block
+
+```hcl
+# Terraform 1.5+
+check "app_responds" {
+  data "http" "health" {
+    url = "https://${aws_lb.app.dns_name}/healthz"
+  }
+
+  assert {
+    condition     = data.http.health.status_code == 200
+    error_message = "App health check returned ${data.http.health.status_code}"
+  }
+}
+```
+
+```hcl
+# Compare: a PRECONDITION blocks the apply
+resource "aws_instance" "app" {
+  lifecycle {
+    precondition {
+      condition     = data.aws_ami.img.architecture == "arm64"
+      error_message = "AMI must be arm64 for Graviton instances."
+    }
+  }
+}
+```
+
+| Mechanism | Runs | On failure |
+|---|---|---|
+| `check` block | After apply | **Warning** — apply still succeeds |
+| `precondition` | Before the resource | **Error** — apply stops |
+| `postcondition` | After the resource | **Error** — apply fails |
+| `variable validation` | Before plan | **Error** — nothing runs |
+
+> ⚠️ **Watch out:** A `check` block never fails an apply — it only emits a warning. Use `postcondition` when the deploy genuinely must stop.
+
+> 💡 **Takeaway:** `check` is for **continuous verification** — "is the thing still healthy?" — and it re-runs on every plan, so it doubles as drift monitoring.
+
+---
+
+### 5️⃣ Import & Check · Interview Q&A
+
+**Q: How do you bring existing infrastructure under Terraform?**
+- Write an `import` block with the target address and the provider's resource ID, then `terraform plan`
+- Use `-generate-config-out` to scaffold the resource block, clean it up, and apply
+- Verify the follow-up plan is empty — a non-empty plan means the config drifted from reality
+
+**Q: `import` block vs `terraform import` CLI?**
+- The block is declarative, reviewable in a PR, and supports config generation
+- The CLI is imperative, leaves no record, and cannot generate config
+
+**Q: What is the difference between a `check` block and a `precondition`?**
+- `check` runs after apply and only warns — good for ongoing health verification
+- `precondition` runs before the resource and hard-fails the apply
+
+**Q: You renamed a resource and Terraform wants to destroy and recreate it. Fix?**
+- Add a `moved` block from the old address to the new one — state is rewritten, no infra churn
+- The alternative, `terraform state mv`, works but is imperative and unreviewable
+
+**Q: How do you hand a resource over to another team's Terraform?**
+- `removed` block drops it from your state without destroying it
+- They adopt it with an `import` block on their side
+
+> 💬 **Say:** "Import to adopt, moved to refactor, removed to hand off — all three are state-only and belong in the PR, not someone's shell history."
 
 ---
