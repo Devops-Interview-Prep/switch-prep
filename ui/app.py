@@ -409,9 +409,13 @@ def add_cors(response):
     return response
 
 if __name__ == "__main__":
+    # Bind to loopback by default — the API can write to your notes and sets
+    # permissive CORS, so it should not be exposed to the network unasked.
+    # Set UI_HOST=0.0.0.0 to reach it from other devices on your LAN.
+    host = os.environ.get("UI_HOST", "127.0.0.1")
+    port = int(os.environ.get("UI_PORT", "5001"))
     print(f"\n  Switch Prep UI")
     print(f"  Notes root : {NOTES_ROOT}")
-    print(f"  Open in    : http://localhost:5001\n")
-    # Listen on 0.0.0.0 so both IPv4 (127.0.0.1) and connections via
-    # localhost (which may resolve to ::1 on macOS) can reach the server.
-    app.run(port=5001, debug=False, host="0.0.0.0")
+    print(f"  Binding on : {host}:{port}")
+    print(f"  Open in    : http://localhost:{port}\n")
+    app.run(port=port, debug=False, host=host)

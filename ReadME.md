@@ -75,9 +75,39 @@ python3 ui/app.py
 **Requirements:** Python 3 and a modern browser. The frontend pulls `marked`,
 `highlight.js`, and `mermaid` from a CDN, so first load needs network access.
 
-> **Note:** the server binds `0.0.0.0:5001` and allows cross-origin requests, and
-> `PUT /api/file` writes to your notes. Anyone on your network can edit notes while it
-> runs. Change `host` in [ui/app.py](ui/app.py) to `127.0.0.1` to keep it local-only.
+The server binds `127.0.0.1:5001` by default — loopback only. This matters because
+`PUT /api/file` writes to your notes and the API sets permissive CORS headers, so an
+exposed port means anyone on your network can read and silently overwrite them. Two
+environment variables override the default:
+
+```bash
+UI_PORT=8080 python3 ui/app.py          # different port
+UI_HOST=0.0.0.0 python3 ui/app.py       # reachable from your phone or another device on the LAN
+```
+
+Only set `UI_HOST=0.0.0.0` on a network you trust.
+
+### Running it always
+
+A macOS LaunchAgent keeps the UI up — it starts at login, restarts within seconds if the
+process dies, and survives reboots:
+
+```bash
+cp ui/com.pawan.switchprep-ui.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.pawan.switchprep-ui.plist
+```
+
+Managing it afterwards:
+
+```bash
+launchctl print gui/$(id -u)/com.pawan.switchprep-ui   # status and PID
+launchctl kickstart -k gui/$(id -u)/com.pawan.switchprep-ui   # restart (after editing code)
+launchctl bootout gui/$(id -u)/com.pawan.switchprep-ui        # stop and disable
+tail -f ~/Library/Logs/switchprep-ui.log                      # logs
+```
+
+The plist pins `UI_HOST=127.0.0.1`. Edit it and `kickstart` to change the bind or port.
+If you move the repo, update the paths in the plist — they are absolute.
 
 ---
 
