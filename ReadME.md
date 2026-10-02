@@ -187,7 +187,7 @@ The UI is a thin client over these endpoints, useful for scripting your own repo
 |---|---|---|
 | `GET` | `/api/tree` | Full note tree with per-file status |
 | `GET` | `/api/file?path=<rel>` | Note `content`, `status`, and its `quality` score |
-| `PUT` | `/api/file` | Write a note — JSON body with `path` and `content` |
+| `PUT` | `/api/file?path=<rel>` | Write a note — `path` in the query string, JSON body `{"content": ...}` |
 | `GET` | `/api/search?q=<term>` | Full-text search; needs 2+ characters, caps at 30 hits |
 | `GET` | `/api/dashboard` | Stats, category breakdown, gaps, best and worst notes |
 

@@ -2423,6 +2423,7 @@ function renderContent() {
   if (path.endsWith('.md') || path.endsWith('.txt')) {
     const html = typeof marked !== 'undefined' ? marked.parse(content || '') : esc(content);
     $('md-content').innerHTML = `<div class="md-body">${html}</div>`;
+    highlightCodeBlocks();
     renderMermaid();
   } else {
     const ext = path.split('.').pop();
@@ -2433,6 +2434,26 @@ function renderContent() {
       $('md-content').innerHTML = `<pre style="margin:28px 48px"><code class="hljs language-${lang}" style="background:transparent">${h}</code></pre>`;
     } catch {
       $('md-content').innerHTML = `<pre style="margin:28px 48px;color:var(--text1);font-family:monospace;font-size:13px">${esc(content)}</pre>`;
+    }
+  }
+}
+
+// Apply syntax highlighting to code blocks in rendered Markdown.
+// Mermaid fences are skipped — renderMermaid() replaces those entirely.
+function highlightCodeBlocks() {
+  const blocks = $('md-content').querySelectorAll('pre code:not(.language-mermaid)');
+  for (const block of blocks) {
+    if (block.dataset.highlighted) continue;
+    try {
+      const cls = [...block.classList].find(c => c.startsWith('language-'));
+      const lang = cls ? cls.slice(9) : null;
+      block.innerHTML = (lang && hljs.getLanguage(lang))
+        ? hljs.highlight(block.textContent, {language: lang, ignoreIllegals: true}).value
+        : hljs.highlightAuto(block.textContent).value;
+      block.classList.add('hljs');
+      block.dataset.highlighted = '1';
+    } catch (e) {
+      console.warn('Highlight error:', e);
     }
   }
 }
@@ -2549,6 +2570,7 @@ $('editor').addEventListener('input', () => {
   const val = $('editor').value;
   if ((S.file.endsWith('.md') || S.file.endsWith('.txt')) && typeof marked !== 'undefined') {
     $('md-content').innerHTML = `<div class="md-body">${marked.parse(val)}</div>`;
+    highlightCodeBlocks();
   }
   updateSaveIndicator();
 });
@@ -2904,14 +2926,11 @@ window.addEventListener('beforeunload', e => { if (isDirty()) { e.preventDefault
    MARKED SETUP
 ═══════════════════════════════════════════ */
 if (typeof marked !== 'undefined') {
+  // NOTE: marked removed the `highlight` option in v5+; it is silently ignored on v9.
+  // Highlighting is applied after render by highlightCodeBlocks() instead.
   marked.setOptions({
     gfm: true,
     breaks: false,
-    highlight: (code, lang) => {
-      if (lang === 'mermaid') return code; // handled separately
-      if (lang && hljs.getLanguage(lang)) return hljs.highlight(code, {language:lang}).value;
-      return hljs.highlightAuto(code).value;
-    },
   });
 }
 
