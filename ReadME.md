@@ -23,7 +23,7 @@ local web UI for browsing, searching, editing, and tracking coverage gaps.
 
 ## What's in here
 
-147 Markdown notes plus runnable examples (YAML manifests, Go programs, shell scripts),
+164 Markdown notes plus runnable examples (YAML manifests, Go programs, shell scripts, a full Terraform platform repo),
 organised by topic:
 
 | Directory | Notes | Covers |
@@ -33,7 +33,7 @@ organised by topic:
 | [Linux & OS/](Linux%20%26%20OS/) | 14 | Commands, processes, filesystem, systemd, scenarios |
 | [Networking/](Networking/) | 13 | Core protocols, load balancing, VPC, CNI |
 | [Tools/](Tools/) | 12 | Observability and supporting tooling |
-| [Terraform/](Terraform/) | 11 | Syntax, state, modules, providers |
+| [Terraform/](Terraform/) | 19 | Syntax, state, modules, providers, best practices, tool boundaries, 8 scenario sets, and a sanitised real platform repo with annotated review ([Real-World/](Terraform/Real-World/)) |
 | [Techs/](Techs/) | 9 | SRE practices and general technologies |
 | [Docker/](Docker/) | 8 | Images, builds, per-language Dockerfiles |
 | [AWS/](AWS/) | 5 | EC2, S3, CloudFront, CloudTrail, autoscaling |

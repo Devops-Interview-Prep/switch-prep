@@ -1,0 +1,241 @@
+variable "aws_region" {
+  description = "AWS region."
+  type        = string
+}
+
+variable "remote_state_bucket" {
+  description = "S3 bucket where Terraform remote states are stored."
+  type        = string
+}
+
+variable "eks_core_state_key" {
+  description = "S3 key for the 02-eks-core Terraform state."
+  type        = string
+}
+
+variable "client" {
+  description = "Client identifier."
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name."
+  type        = string
+}
+
+variable "name_prefix" {
+  description = "Name prefix."
+  type        = string
+}
+
+variable "cluster_name" {
+  description = "EKS cluster name used by provider initialization."
+  type        = string
+}
+
+variable "karpenter_namespace" {
+  description = "Karpenter namespace."
+  type        = string
+  default     = "kube-system"
+}
+
+variable "karpenter_release_name" {
+  description = "Karpenter Helm release name."
+  type        = string
+  default     = "karpenter"
+}
+
+variable "karpenter_chart_version" {
+  description = "Karpenter Helm chart version."
+  type        = string
+  default     = "1.13.0"
+}
+
+variable "karpenter_service_account_name" {
+  description = "Karpenter service account name."
+  type        = string
+  default     = "karpenter"
+}
+
+variable "karpenter_ami_alias" {
+  description = "Karpenter AMI alias."
+  type        = string
+  default     = "al2023@latest"
+}
+
+variable "karpenter_replicas" {
+  description = "Karpenter controller replica count."
+  type        = number
+  default     = 2
+}
+
+variable "create_karpenter_node_role_access_entry" {
+  description = "Whether to create EC2_LINUX access entry for Karpenter node role."
+  type        = bool
+  default     = false
+}
+
+variable "tags" {
+  description = "Common tags."
+  type        = map(string)
+  default     = {}
+}
+variable "karpenter_controller_cpu_request" {
+  description = "CPU request for Karpenter controller."
+  type        = string
+  default     = "500m"
+}
+
+variable "karpenter_controller_memory_request" {
+  description = "Memory request for Karpenter controller."
+  type        = string
+  default     = "512Mi"
+}
+
+variable "karpenter_controller_cpu_limit" {
+  description = "CPU limit for Karpenter controller."
+  type        = string
+  default     = "1"
+}
+
+variable "karpenter_controller_memory_limit" {
+  description = "Memory limit for Karpenter controller."
+  type        = string
+  default     = "1Gi"
+}
+variable "network_state_key" {
+  description = "S3 key for the 01-network Terraform state."
+  type        = string
+}
+
+variable "aws_load_balancer_controller_namespace" {
+  description = "Namespace for AWS Load Balancer Controller."
+  type        = string
+  default     = "kube-system"
+}
+
+variable "aws_load_balancer_controller_release_name" {
+  description = "AWS Load Balancer Controller Helm release name."
+  type        = string
+  default     = "aws-load-balancer-controller"
+}
+
+variable "aws_load_balancer_controller_chart_version" {
+  description = "AWS Load Balancer Controller chart version."
+  type        = string
+  default     = "1.13.3"
+}
+
+variable "aws_load_balancer_controller_service_account_name" {
+  description = "AWS Load Balancer Controller service account name."
+  type        = string
+  default     = "aws-load-balancer-controller"
+}
+
+variable "aws_load_balancer_controller_replica_count" {
+  description = "AWS Load Balancer Controller replica count."
+  type        = number
+  default     = 2
+}
+
+variable "aws_load_balancer_controller_node_selector" {
+  description = "Node selector for AWS Load Balancer Controller pods."
+  type        = map(string)
+  default     = {}
+}
+
+variable "aws_load_balancer_controller_tolerations" {
+  description = "Tolerations for AWS Load Balancer Controller pods."
+  type        = list(any)
+  default     = []
+}
+variable "ebs_csi_policy_arn" {
+  description = "Optional override for EBS CSI IAM policy ARN."
+  type        = string
+  default     = null
+}
+
+variable "efs_csi_policy_arn" {
+  description = "Optional override for EFS CSI IAM policy ARN."
+  type        = string
+  default     = null
+}
+
+variable "ebs_csi_addon_version" {
+  description = "Optional EBS CSI add-on version."
+  type        = string
+  default     = null
+}
+
+variable "efs_csi_addon_version" {
+  description = "Optional EFS CSI add-on version."
+  type        = string
+  default     = null
+}
+
+variable "argocd_release_name" {
+  description = "ArgoCD Helm release name."
+  type        = string
+  default     = "argocd"
+}
+
+variable "argocd_namespace" {
+  description = "ArgoCD namespace."
+  type        = string
+  default     = "argocd"
+}
+
+variable "argocd_chart_version" {
+  description = "ArgoCD chart version."
+  type        = string
+  default     = "10.1.2"
+}
+
+variable "argocd_server_service_type" {
+  description = "ArgoCD server service type."
+  type        = string
+  default     = "ClusterIP"
+}
+
+variable "argocd_server_insecure" {
+  description = "Run ArgoCD server in insecure mode."
+  type        = bool
+  default     = false
+}
+
+variable "argocd_node_selector" {
+  description = "Node selector for ArgoCD pods."
+  type        = map(string)
+  default     = {}
+}
+
+variable "argocd_tolerations" {
+  description = "Tolerations for ArgoCD pods."
+  type        = list(any)
+  default     = []
+}
+
+variable "argocd_helm_repo_url" {
+  description = "Git URL for the Helm values repository registered as an ArgoCD repo secret."
+  type        = string
+  default     = "https://github.com/example-org/app-helm-values.git"
+}
+
+variable "argocd_helm_repo_username" {
+  description = "Username for the ArgoCD Helm values repository."
+  type        = string
+  default     = ""
+}
+
+variable "argocd_helm_repo_password" {
+  description = "App password / token for the ArgoCD Helm values repository."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "argocd_helm_repo_secret_name" {
+  description = "Name of the Kubernetes secret created in the argocd namespace."
+  type        = string
+  default     = "app-helm-values-repo-global"
+}

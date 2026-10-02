@@ -17,6 +17,12 @@
 | [07-Question-Bank-Checklist.md](07-Question-Bank-Checklist.md) | ~75 rapid-fire Qs, whiteboard prompts, questions to ask them, day-before checklist, one-page cheat sheet |
 | [JD.md](JD.md) | The job description and interview process as shared by the recruiter |
 
+## Real code to practise the module review on
+
+- [Terraform/Real-World/](../../../Terraform/Real-World/README.md): sanitised production platform repo (VPC, EKS, Karpenter, ArgoCD, per-app RDS/S3/SQS) with a layout-and-flow note, a block-by-block walkthrough, and a full review with ranked findings.
+- [Terraform/Interview-Scenarios/07](../../../Terraform/Interview-Scenarios/07-Real-Platform-Code-Review.md) and [08](../../../Terraform/Interview-Scenarios/08-Design-and-Operations-Drills.md): 26 scenarios and live-coding prompts built from that code.
+- [Terraform/Best-Practices.md](../../../Terraform/Best-Practices.md) and [Terraform/What-To-Use-Terraform-For.md](../../../Terraform/What-To-Use-Terraform-For.md): the standards and the tool boundary, each tied back to the real repo.
+
 ## The round in one paragraph
 
 Three blocks: (1) a screen-shared **review of a real Terraform module** probing boundaries, state, drift and review process; (2) **AWS + EKS architecture depth**: VPC, IAM, EKS operations, upgrades, admission controllers; (3) **cost governance**: guardrails you set up and optimisation you delivered. Every answer should carry three layers: the mechanism, the trade-off, and the standard you would enforce across a team.

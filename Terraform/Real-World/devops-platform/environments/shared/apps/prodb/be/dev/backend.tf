@@ -1,0 +1,9 @@
+terraform {
+  backend "s3" {
+    bucket       = "example-tf-state-123456789012-us-east-1"
+    key          = "launchpad/environments/shared/apps/prodb/be/dev/terraform.tfstate"
+    region       = "us-east-1"
+    use_lockfile = true
+    encrypt      = true
+  }
+}

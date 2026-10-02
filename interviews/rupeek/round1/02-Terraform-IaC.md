@@ -4,6 +4,8 @@
 
 ---
 
+> **Practise on real code:** a sanitised copy of a production platform repo with annotated notes lives in [Terraform/Real-World](../../../Terraform/Real-World/README.md) (layout and flow, block-by-block walkthrough, a full tech-lead review with 30+ findings). Scenario drills built from it are in [Interview-Scenarios 07](../../../Terraform/Interview-Scenarios/07-Real-Platform-Code-Review.md) and [08](../../../Terraform/Interview-Scenarios/08-Design-and-Operations-Drills.md); the standards themselves are in [Best-Practices](../../../Terraform/Best-Practices.md) and the tool-boundary note in [What-To-Use-Terraform-For](../../../Terraform/What-To-Use-Terraform-For.md).
+
 This is the block they open with, and the live module review is where most candidates lose the round. The interviewer wants to see that you have **standards** for modules, state, and review, that you can spot a bad module in two minutes, and that you can explain why Terraform and not something else.
 
 ## Module design
